@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiz Show Controller</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #e0e0e0; min-height: 100vh; }
+  input, button { font: inherit; }
+  .hidden { display: none !important; }
+
+  .screen, .content { max-width: 800px; margin: 0 auto; padding: 2rem 1rem; }
+  .screen-center, .content-center { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center; }
+
+  h1 { font-size: 2rem; margin-bottom: .5rem; color: #fff; }
+  h2 { font-size: 1.25rem; margin-bottom: 1rem; color: #a0a0b8; }
+  p { color: #888; margin-bottom: 1.5rem; }
+
+  .card { background: #1a1a2e; border-radius: 12px; padding: 2rem; margin-bottom: 1rem; border: 1px solid #2a2a3e; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; padding: .75rem 1.5rem; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-size: 1rem; transition: all .15s; width: 100%; }
+  .btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
+  .btn-primary { background: #6c5ce7; color: #fff; }
+  .btn-success { background: #00b894; color: #fff; }
+  .btn-danger { background: #d63031; color: #fff; }
+  .btn-warning { background: #fdcb6e; color: #1a1a2e; }
+  .btn-outline { background: transparent; color: #a0a0b8; border: 1px solid #2a2a3e; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; filter: none; transform: none; }
+
+  input[type="text"] { width: 100%; padding: .75rem 1rem; border-radius: 8px; border: 1px solid #2a2a3e; background: #16162a; color: #e0e0e0; font-size: 1rem; outline: none; transition: border .15s; }
+  input[type="text"]:focus { border-color: #6c5ce7; }
+
+  .flex-row { display: flex; gap: .75rem; flex-wrap: wrap; }
+  .flex-row .btn { flex: 1; min-width: 80px; }
+  .gap-sm { gap: .5rem; }
+  .mt-1 { margin-top: 1rem; }
+  .mb-1 { margin-bottom: 1rem; }
+  .text-center { text-align: center; }
+
+  .code-display { font-size: 3rem; font-weight: 800; letter-spacing: .5rem; color: #6c5ce7; background: #16162a; padding: 1rem 2rem; border-radius: 12px; display: inline-block; margin: 1rem 0; font-family: monospace; }
+
+  .player-card { background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 8px; padding: 1rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; }
+  .player-card .name { font-weight: 600; }
+  .player-card .score { font-size: 1.25rem; font-weight: 700; color: #fdcb6e; }
+  .player-card .score-actions { display: flex; gap: .25rem; }
+  .player-card .score-actions button { width: 36px; height: 36px; border-radius: 6px; border: none; cursor: pointer; font-weight: 700; font-size: .9rem; }
+  .btn-plus { background: #00b894; color: #fff; }
+  .btn-minus { background: #d63031; color: #fff; }
+
+  .buzzer-btn { width: 200px; height: 200px; border-radius: 50%; border: none; font-size: 2rem; font-weight: 800; cursor: pointer; transition: all .15s; margin: 1rem auto; display: block; }
+  .buzzer-ready { background: #636e72; color: #b2bec3; }
+  .buzzer-active { background: #d63031; color: #fff; box-shadow: 0 0 40px rgba(214,48,49,.5); animation: pulse 1s infinite; }
+  .buzzer-pressed { background: #fdcb6e; color: #1a1a2e; }
+  .buzzer-disabled { background: #2d2d2d; color: #636e72; }
+
+  @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+
+  .buzzer-order { display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap; margin: 1rem 0; }
+  .buzzer-order .pos { background: #2a2a3e; border-radius: 8px; padding: .5rem 1rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
+  .buzzer-order .pos .num { background: #6c5ce7; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: .8rem; }
+
+  .scores-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .75rem; margin: 1rem 0; }
+  .score-card { background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 8px; padding: 1rem; text-align: center; }
+  .score-card .name { font-size: .85rem; color: #888; }
+  .score-card .score { font-size: 1.75rem; font-weight: 800; color: #fdcb6e; }
+
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: .5rem; }
+  .status-online { background: #00b894; }
+  .status-buzzed { background: #fdcb6e; }
+  .status-idle { background: #636e72; }
+
+  .nav-bar { display: flex; justify-content: space-between; align-items: center; padding: .75rem 1rem; background: #1a1a2e; border-bottom: 1px solid #2a2a3e; }
+  .nav-bar .room-code { font-size: .85rem; color: #6c5ce7; font-weight: 600; }
+
+  .toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: #1a1a2e; border: 1px solid #2a2a3e; padding: .75rem 1.5rem; border-radius: 8px; font-size: .9rem; z-index: 100; }
+
+  .dropdown { position: relative; display: inline-block; }
+  .dropdown-btn { background: none; border: 1px solid #2a2a3e; color: #a0a0b8; padding: .4rem .75rem; border-radius: 6px; cursor: pointer; font-size: .85rem; }
+  .dropdown-btn:hover { background: #2a2a3e; }
+  .dropdown-menu { position: absolute; top: 100%; right: 0; background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 8px; min-width: 170px; z-index: 50; display: none; overflow: hidden; margin-top: 4px; }
+  .dropdown-menu.show { display: block; }
+  .dropdown-menu button { display: block; width: 100%; padding: .6rem 1rem; text-align: left; border: none; background: none; color: #e0e0e0; font-size: .85rem; cursor: pointer; }
+  .dropdown-menu button:hover { background: #2a2a3e; }
+  .dropdown-menu .divider { height: 1px; background: #2a2a3e; margin: .25rem 0; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- Screen: Login -->
+  <div id="screen-login" class="screen screen-center">
+    <div style="max-width: 360px;">
+      <h1>🎬 Quiz Show</h1>
+      <p>Digite seu nome para começar</p>
+      <div class="card">
+        <input type="text" id="login-name" placeholder="Seu nome" maxlength="50" autofocus>
+        <button class="btn btn-primary mt-1" onclick="handleLogin()">Entrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen: Lobby -->
+  <div id="screen-lobby" class="screen screen-center hidden">
+    <div style="max-width: 400px;">
+      <h1>Olá, <span id="lobby-name"></span>!</h1>
+      <p>O que você quer fazer?</p>
+      <div class="card">
+        <button class="btn btn-primary mb-1" onclick="handleCreateRoom()">🎯 Criar Sala</button>
+        <button class="btn btn-outline" onclick="showJoinRoom()">🔗 Entrar em uma Sala</button>
+        <div id="join-form" class="hidden mt-1">
+          <input type="text" id="join-code" placeholder="Código da sala" maxlength="4" style="text-transform:uppercase;text-align:center;font-size:1.5rem;letter-spacing:.5rem;">
+          <button class="btn btn-success mt-1" onclick="handleJoinRoom()">Entrar</button>
+        </div>
+      </div>
+      <button class="btn btn-outline mt-1" onclick="handleLogout()" style="width:auto;padding:.5rem 1rem;font-size:.85rem;">Sair</button>
+    </div>
+  </div>
+
+  <!-- Screen: Presenter -->
+  <div id="screen-presenter" class="hidden">
+    <div class="nav-bar">
+      <span><strong>🎬 <span id="pres-title"></span></strong></span>
+      <span class="room-code" style="cursor:pointer;" onclick="copyRoomCode()" title="Copiar código">📋 <span id="pres-code"></span></span>
+      <div class="dropdown">
+        <button class="dropdown-btn" onclick="toggleMenu('pres-menu')">☰ Menu</button>
+        <div class="dropdown-menu" id="pres-menu">
+          <button onclick="handleCloseRoom()">🚪 Encerrar Sala</button>
+          <button onclick="handleLeaveRoom()">🔙 Sair da Sala</button>
+          <div class="divider"></div>
+          <button onclick="handleChangeName()">✏️ Mudar Nome</button>
+        </div>
+      </div>
+    </div>
+    <div class="content">
+      <div class="flex-row mb-1">
+        <button class="btn btn-success" id="btn-start-round" onclick="handleStartRound()">▶ Começar Rodada</button>
+        <button class="btn btn-warning" id="btn-next-round" onclick="handleNextRound()" disabled>⏭ Próxima Rodada</button>
+      </div>
+      <div id="pres-round-info" class="hidden card">
+        <p style="color:#6c5ce7;font-weight:600;">Rodada <span id="pres-round-num">1</span></p>
+        <input type="text" id="pres-media-url" placeholder="Link do YouTube/imagem (opcional)">
+        <input type="text" id="pres-correct-answer" placeholder="Resposta correta (opcional)" class="mt-1">
+      </div>
+      <h2 style="margin-top:1rem;">🏆 Placar</h2>
+      <div id="pres-players"></div>
+      <h2 style="margin-top:1rem;">📋 Ordem das Buzinas</h2>
+      <div id="pres-buzzer-order" class="buzzer-order"><p style="color:#636e72;">Aguardando...</p></div>
+      <h2 style="margin-top:1rem;">✍️ Respostas</h2>
+      <div id="pres-answers"></div>
+    </div>
+  </div>
+
+  <!-- Screen: Player -->
+  <div id="screen-player" class="hidden">
+    <div class="nav-bar">
+      <span><strong>🎬 <span id="player-room-title"></span></strong></span>
+      <span style="font-size:.85rem;color:#888;">Olá, <span id="player-name"></span></span>
+      <div class="dropdown">
+        <button class="dropdown-btn" onclick="toggleMenu('player-menu')">☰ Menu</button>
+        <div class="dropdown-menu" id="player-menu">
+          <button onclick="handleLeaveRoom()">🚪 Sair da Sala</button>
+          <div class="divider"></div>
+          <button onclick="handleChangeName()">✏️ Mudar Nome</button>
+        </div>
+      </div>
+    </div>
+    <div class="content-center">
+      <div class="score-card" style="width:100%;max-width:300px;">
+        <div class="name">Seus Pontos</div>
+        <div class="score" id="player-score">0</div>
+      </div>
+      <button class="buzzer-btn buzzer-disabled" id="player-buzzer" disabled onmousedown="handleBuzz()">🔔</button>
+      <textarea id="player-answer" placeholder="Digite sua resposta..." disabled style="width:100%;max-width:400px;padding:.75rem;border-radius:8px;border:1px solid #2a2a3e;background:#16162a;color:#e0e0e0;font-size:1rem;resize:none;height:80px;"></textarea>
+      <div id="player-buzzer-order" class="buzzer-order"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+// ─── State ───────────────────────────────────────
+const state = { user: null, room: null, socket: null, currentRoundId: null };
+let answerTimeout = null;
+
+// ─── Helpers ─────────────────────────────────────
+function $(id) { return document.getElementById(id); }
+function show(screen) {
+  ['screen-login', 'screen-lobby', 'screen-presenter', 'screen-player'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+  $(screen).classList.remove('hidden');
+}
+function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2500); }
+function toggleMenu(id) { const el = $(id); if (el) el.classList.toggle('show'); }
+document.addEventListener('click', (e) => { if (!e.target.closest('.dropdown')) document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show')); });
+
+function copyRoomCode() {
+  const code = state.room?.code;
+  if (code) { navigator.clipboard.writeText(code).then(() => toast('Código copiado: ' + code)); }
+}
+
+function api(path, data) {
+  return fetch('/api' + path, {
+    method: data ? 'POST' : 'GET',
+    headers: { 'Content-Type': 'application/json' },
+    body: data ? JSON.stringify(data) : undefined,
+  }).then(r => r.json());
+}
+
+// ─── Login ───────────────────────────────────────
+function handleLogin() {
+  const name = $('login-name').value.trim();
+  if (!name) return toast('Digite seu nome');
+  const sessionId = localStorage.getItem('session_id');
+  api('/auth', { name, session_id: sessionId || undefined }).then(res => {
+    if (res.user) {
+      state.user = res.user;
+      localStorage.setItem('session_id', res.user.session_id);
+      $('lobby-name').textContent = res.user.name;
+      show('screen-lobby');
+    }
+  });
+}
+
+function handleLogout() {
+  localStorage.removeItem('session_id');
+  state.user = null;
+  $('login-name').value = '';
+  show('screen-login');
+  $('login-name').focus();
+}
+
+function showJoinRoom() {
+  $('join-form').classList.remove('hidden');
+  $('join-code').focus();
+}
+
+// ─── Create / Join Room ──────────────────────────
+function handleCreateRoom() {
+  console.log('handleCreateRoom', state.user);
+  api('/rooms', { user_id: state.user.id }).then(res => {
+    console.log('room created', res);
+    if (res.room) {
+      state.room = res.room;
+      console.log('connecting socket with room_id:', res.room.id);
+      connectSocket(res.room.id);
+    } else {
+      toast('Erro ao criar sala: ' + (res.error || 'desconhecido'));
+    }
+  }).catch(e => toast('Erro: ' + e.message));
+}
+
+function handleJoinRoom() {
+  const code = $('join-code').value.trim().toUpperCase();
+  console.log('handleJoinRoom', code);
+  if (!code || code.length !== 4) return toast('Código inválido');
+  api('/rooms/' + code).then(res => {
+    console.log('room lookup result', res);
+    if (res.room) {
+      if (res.room.status === 'finished') return toast('Sala encerrada');
+      api('/rooms/' + res.room.id + '/players', { user_id: state.user.id }).then(r2 => {
+        console.log('add player result', r2);
+        state.room = res.room;
+        console.log('joining room:', res.room.id);
+        connectSocket(res.room.id);
+      }).catch(e => toast('Erro ao entrar: ' + e.message));
+    } else {
+      toast('Sala não encontrada');
+    }
+  }).catch(e => toast('Erro: ' + e.message));
+}
+
+// ─── WebSocket ────────────────────────────────────
+function connectSocket(roomId) {
+  console.log('connectSocket called', roomId, 'user:', state.user?.id);
+  if (state.socket) { console.log('disconnecting old socket'); state.socket.disconnect(); }
+  state.socket = io('/', { query: { room_id: roomId, user_id: state.user.id } });
+
+  state.socket.on('connect', () => {
+    console.log('SOCKET CONNECTED! isPresenter:', state.room?.presenter_id === state.user.id);
+    if (state.room?.presenter_id === state.user.id) {
+      enterPresenter(roomId);
+    } else {
+      console.log('emitting sala:entrar');
+      state.socket.emit('sala:entrar', { room_id: roomId, user_id: state.user.id });
+    }
+  });
+
+  state.socket.on('connect_error', (err) => {
+    console.error('Socket connection error:', err.message);
+    toast('Erro de conexão: ' + err.message);
+  });
+
+  state.socket.on('sala:status', (data) => {
+    console.log('sala:status received', data);
+    state.room = { ...state.room, ...data.room };
+    if (state.room.presenter_id === state.user.id) {
+      updatePresenter(data);
+    } else {
+      console.log('updatePlayer called');
+      updatePlayer(data);
+    }
+  });
+
+  state.socket.on('sala:jogadores', (data) => {
+    console.log('sala:jogadores received', data);
+    if (state.room?.presenter_id === state.user.id) {
+      renderPresenterPlayers(data.players);
+    }
+  });
+
+  state.socket.on('rodada:iniciada', (data) => {
+    state.currentRoundId = data.round_id;
+    if (state.room?.presenter_id === state.user.id) {
+      $('pres-round-num').textContent = data.round_number;
+      $('pres-round-info').classList.remove('hidden');
+      $('btn-start-round').disabled = true;
+      $('btn-next-round').disabled = false;
+      $('pres-buzzer-order').innerHTML = '<p style="color:#636e72;">Aguardando jogadores...</p>';
+      $('pres-answers').innerHTML = '';
+    } else {
+      $('player-buzzer').disabled = false;
+      $('player-buzzer').className = 'buzzer-btn buzzer-active';
+      $('player-answer').disabled = false;
+      $('player-answer').value = '';
+      $('player-buzzer-order').innerHTML = '';
+    }
+  });
+
+  state.socket.on('buzina:ordem', (data) => {
+    if (state.room?.presenter_id === state.user.id) {
+      renderBuzzerOrder(data.order);
+    } else {
+      const myPos = data.order.find(o => o.player_id === state.user.id);
+      if (myPos) {
+        $('player-buzzer').disabled = true;
+        $('player-buzzer').className = 'buzzer-btn buzzer-pressed';
+      }
+      const orderHtml = data.order.map(o =>
+        `<span class="pos"><span class="num">${o.position}º</span> ${o.player_name}</span>`
+      ).join('');
+      $('player-buzzer-order').innerHTML = `<div style="display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;">${orderHtml}</div>`;
+    }
+  });
+
+  state.socket.on('resposta:atualizada', (data) => {
+    if (state.room?.presenter_id === state.user.id) {
+      renderAnswers([data]);
+    }
+  });
+
+  state.socket.on('placar:atualizado', (data) => {
+    if (state.room?.presenter_id === state.user.id) {
+      renderPresenterScores(data.scores);
+    } else {
+      const me = data.scores.find(s => s.player_id === state.user.id);
+      if (me) $('player-score').textContent = me.score;
+    }
+  });
+
+  state.socket.on('rodada:proxima', () => {
+    state.currentRoundId = null;
+    if (state.room?.presenter_id === state.user.id) {
+      $('pres-round-info').classList.add('hidden');
+      $('btn-start-round').disabled = false;
+      $('btn-next-round').disabled = true;
+      $('pres-media-url').value = '';
+      $('pres-correct-answer').value = '';
+      $('pres-buzzer-order').innerHTML = '<p style="color:#636e72;">Aguardando...</p>';
+      $('pres-answers').innerHTML = '';
+    } else {
+      $('player-buzzer').disabled = true;
+      $('player-buzzer').className = 'buzzer-btn buzzer-disabled';
+      $('player-answer').disabled = true;
+      $('player-answer').value = '';
+      $('player-buzzer-order').innerHTML = '';
+    }
+  });
+
+  state.socket.on('erro', (data) => toast(data.message));
+}
+
+// ─── Presenter UI ─────────────────────────────────
+function enterPresenter(roomId) {
+  $('pres-code').textContent = state.room.code;
+  $('pres-title').textContent = state.room.title || 'Quiz Show';
+  $('btn-start-round').disabled = false;
+  $('btn-next-round').disabled = true;
+  show('screen-presenter');
+}
+
+function updatePresenter(data) {
+  renderPresenterPlayers(data.players);
+  renderPresenterScores(data.scores);
+  if (data.current_round) {
+    state.currentRoundId = data.current_round.id;
+    $('pres-round-num').textContent = data.current_round.round_number;
+    $('pres-round-info').classList.remove('hidden');
+    $('btn-start-round').disabled = true;
+    $('btn-next-round').disabled = false;
+    renderBuzzerOrder(data.current_round.buzzer_order);
+  }
+}
+
+function renderPresenterPlayers(players) {
+  const container = $('pres-players');
+  if (!players || players.length === 0) {
+    container.innerHTML = '<p style="color:#636e72;">Nenhum jogador conectado</p>';
+    return;
+  }
+  container.innerHTML = players.filter(p => p.role === 'player').map(p => `
+    <div class="player-card" id="pp-${p.user_id}">
+      <div><span class="name">${escapeHtml(p.name)}</span></div>
+      <div style="display:flex;align-items:center;gap:.75rem;">
+        <span class="score" id="ps-${p.user_id}">${p.score_cache}</span>
+        <div class="score-actions">
+          <button class="btn-plus" onclick="changeScore('${p.user_id}', 3)">+3</button>
+          <button class="btn-plus" onclick="changeScore('${p.user_id}', 1)">+1</button>
+          <button class="btn-minus" onclick="changeScore('${p.user_id}', -2)">-2</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderPresenterScores(scores) {
+  if (!scores) return;
+  scores.forEach(s => {
+    const el = $('ps-' + s.player_id);
+    if (el) el.textContent = s.score;
+  });
+}
+
+function renderBuzzerOrder(order) {
+  if (!order || order.length === 0) {
+    $('pres-buzzer-order').innerHTML = '<p style="color:#636e72;">Aguardando jogadores...</p>';
+    return;
+  }
+  const html = order.map(o =>
+    `<span class="pos"><span class="num">${o.position}º</span> ${o.player_name}</span>`
+  ).join('');
+  $('pres-buzzer-order').innerHTML = `<div style="display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;">${html}</div>`;
+}
+
+function renderAnswers(answers) {
+  const container = $('pres-answers');
+  const items = answers.map(a => `
+    <div class="player-card">
+      <span class="name">${escapeHtml(a.player_name || a.player_id)}</span>
+      <span style="color:#fdcb6e;">${escapeHtml(a.text)}</span>
+    </div>
+  `).join('');
+  container.innerHTML = items || '<p style="color:#636e72;">Nenhuma resposta ainda</p>';
+}
+
+function handleStartRound() {
+  const mediaUrl = $('pres-media-url').value.trim();
+  const correctAnswer = $('pres-correct-answer').value.trim();
+  state.socket.emit('rodada:iniciar', {
+    room_id: state.room.id,
+    media_url: mediaUrl,
+    correct_answer: correctAnswer,
+  });
+}
+
+function handleNextRound() {
+  if (!state.currentRoundId) return;
+  state.socket.emit('rodada:proxima', {
+    room_id: state.room.id,
+    round_id: state.currentRoundId,
+  });
+}
+
+function changeScore(playerId, delta) {
+  if (!state.currentRoundId) return toast('Inicie uma rodada primeiro');
+  state.socket.emit('pontos:alterar', {
+    room_id: state.room.id,
+    round_id: state.currentRoundId,
+    player_id: playerId,
+    score_delta: delta,
+    judgment: delta > 0 ? (delta >= 3 ? 'na_mosca' : 'raspando') : 'errado',
+  });
+}
+
+function handleCloseRoom() {
+  if (!confirm('Encerrar a sala?')) return;
+  api('/rooms/' + state.room.id, null);
+  if (state.socket) state.socket.disconnect();
+  state.room = null;
+  show('screen-lobby');
+  toast('Sala encerrada');
+}
+
+function handleLeaveRoom() {
+  if (state.socket) {
+    state.socket.emit('sala:sair', { room_id: state.room.id, user_id: state.user.id });
+    state.socket.disconnect();
+  }
+  state.room = null;
+  show('screen-lobby');
+}
+
+function handleChangeName() {
+  if (state.socket) {
+    state.socket.emit('sala:sair', { room_id: state.room.id, user_id: state.user.id });
+    state.socket.disconnect();
+  }
+  state.room = null;
+  state.user = null;
+  localStorage.removeItem('session_id');
+  $('login-name').value = '';
+  show('screen-login');
+  $('login-name').focus();
+}
+
+// ─── Player UI ────────────────────────────────────
+function updatePlayer(data) {
+  if (data.room) $('player-room-title').textContent = data.room.title || 'Quiz';
+  $('player-name').textContent = state.user.name;
+  const me = data.players?.find(p => p.id === state.user.id);
+  if (me) $('player-score').textContent = me.score;
+  if (data.scores) {
+    const me2 = data.scores.find(s => s.player_id === state.user.id);
+    if (me2) $('player-score').textContent = me2.score;
+  }
+  show('screen-player');
+}
+
+function handleBuzz() {
+  if (!state.currentRoundId) return toast('Nenhuma rodada ativa');
+  if (state.socket) {
+    state.socket.emit('buzina:apertar', {
+      room_id: state.room.id,
+      round_id: state.currentRoundId,
+      player_id: state.user.id,
+    });
+  }
+}
+
+// Answer input: debounce para enviar enquanto digita
+$('player-answer').addEventListener('input', function() {
+  if (!state.currentRoundId || this.disabled) return;
+  clearTimeout(answerTimeout);
+  answerTimeout = setTimeout(() => {
+    state.socket.emit('resposta:escrever', {
+      round_id: state.currentRoundId,
+      player_id: state.user.id,
+      text: this.value,
+    });
+  }, 300);
+});
+
+// ─── Utilities ────────────────────────────────────
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ─── Init ─────────────────────────────────────────
+const savedSession = localStorage.getItem('session_id');
+if (savedSession) {
+  api('/auth', { name: '', session_id: savedSession }).then(res => {
+    if (res.user) {
+      state.user = res.user;
+      $('lobby-name').textContent = res.user.name;
+      show('screen-lobby');
+    }
+  });
+}
+</script>
+</body>
+</html>
