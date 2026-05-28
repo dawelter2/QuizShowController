@@ -6,7 +6,7 @@ import {
   upsertAnswer, judgeAnswer, getRoundAnswers,
   updateScoreCache, getRoomScores,
   addPlayerToRoom, removePlayerFromRoom,
-} from '../database/queries.js';
+} from '../store/queries.js';
 
 type ClientData = {
   room_id?: string;

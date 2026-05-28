@@ -3,7 +3,7 @@ import {
   createUser, findUserBySession, updateLastSeen,
   createRoom, findRoomByCode, findRoomById, updateRoom, closeRoom,
   addPlayerToRoom, removePlayerFromRoom, listRoomPlayers,
-} from '../database/queries.js';
+} from '../store/queries.js';
 
 export const router = Router();
 
