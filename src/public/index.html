@@ -42,7 +42,7 @@
       <h1>🎬 Quiz Show</h1>
       <p>Digite seu nome para começar</p>
       <div class="card">
-        <input type="text" id="login-name" placeholder="Seu nome" maxlength="50" autofocus>
+        <input type="text" id="login-name" placeholder="Seu nome" maxlength="50" autofocus onkeydown="if(event.key==='Enter') handleLogin()">
         <button class="btn btn-primary mt-1" onclick="handleLogin()">Entrar</button>
       </div>
     </div>
@@ -56,7 +56,7 @@
         <button class="btn btn-primary mb-1" onclick="handleCreateRoom()">🎯 Criar Sala</button>
         <button class="btn btn-outline" onclick="showJoinRoom()">🔗 Entrar em uma Sala</button>
         <div id="join-form" class="hidden mt-1">
-          <input type="text" id="join-code" placeholder="Código da sala" maxlength="4" style="text-transform:uppercase;text-align:center;font-size:1.5rem;letter-spacing:.5rem;">
+          <input type="text" id="join-code" placeholder="Código da sala" maxlength="4" style="text-transform:uppercase;text-align:center;font-size:1.5rem;letter-spacing:.5rem;" onkeydown="if(event.key==='Enter') handleJoinRoom()">
           <button class="btn btn-success mt-1" onclick="handleJoinRoom()">Entrar</button>
         </div>
       </div>
