@@ -158,7 +158,7 @@ GET /api/rooms/:id/rounds/:roundId → Detalhes de uma rodada
 
 ## 2. Eventos WebSocket (tempo real)
 
-Conexão: `ws://localhost:3000/ws?sala_id=UUID&user_id=UUID`
+Conexão: `ws://localhost:7000/ws?sala_id=UUID&user_id=UUID`
 
 ### Eventos do Cliente para o Servidor
 

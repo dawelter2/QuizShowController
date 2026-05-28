@@ -8,7 +8,7 @@ import { router as apiRoutes } from './api/routes.js';
 import { setupSocketEvents } from './ws/events.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT) || 7000;
 
 const app = express();
 const httpServer = createServer(app);
@@ -25,6 +25,12 @@ app.use('/api', apiRoutes);
 
 // Static files (frontend)
 app.use(express.static(join(__dirname, 'public')));
+
+// Rotas dedicadas por papel
+app.get('/apresentador', (_req, res) => res.sendFile(join(__dirname, 'public', 'apresentador.html')));
+app.get('/jogador',      (_req, res) => res.sendFile(join(__dirname, 'public', 'jogador.html')));
+app.get('/score',        (_req, res) => res.sendFile(join(__dirname, 'public', 'score.html')));
+app.get('/score-demo',   (_req, res) => res.sendFile(join(__dirname, 'public', 'score-demo.html')));
 
 // SPA fallback
 app.get('*', (_req, res) => {

@@ -12,12 +12,12 @@
 ## Setup Inicial
 
 ```
-Mestre acessa http://localhost:3000/
+Mestre acessa http://localhost:7000/
   → Digita nome: "Mestre"
   → Clicka em "Criar Sala"
   → Sala criada! Código: X7K9
 
-Ana acessa http://localhost:3000/
+Ana acessa http://localhost:7000/
   → Digita nome: "Ana"
   → Clicka em "Entrar em Sala"
   → Digita código: X7K9

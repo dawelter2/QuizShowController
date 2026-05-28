@@ -12,11 +12,6 @@ export const router = Router();
 router.post('/auth', (req: Request, res: Response) => {
   const { name, session_id } = req.body;
 
-  if (!name || typeof name !== 'string' || name.trim().length === 0) {
-    res.status(400).json({ error: 'Nome é obrigatório' });
-    return;
-  }
-
   if (session_id) {
     const existing = findUserBySession(session_id);
     if (existing) {
@@ -24,6 +19,11 @@ router.post('/auth', (req: Request, res: Response) => {
       res.json({ user: existing });
       return;
     }
+  }
+
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    res.status(400).json({ error: 'Nome é obrigatório' });
+    return;
   }
 
   const newSessionId = crypto.randomUUID();

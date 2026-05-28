@@ -155,7 +155,8 @@ export function addPlayerToRoom(roomId: string, userId: string, role: 'presenter
     INSERT INTO room_players (room_id, user_id, role, joined_at)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(room_id, user_id) DO UPDATE SET
-      left_at = NULL, role = excluded.role
+      left_at = NULL,
+      role = CASE WHEN room_players.role = 'presenter' THEN 'presenter' ELSE excluded.role END
   `).run(roomId, userId, role, now);
 }
 

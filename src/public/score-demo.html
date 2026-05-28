@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Demo de Estilos — Score</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; color: #fff; background: #0a0a14; min-height: 100vh; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 2px; min-height: 100vh; }
+  .quadrant { padding: 1.5rem; position: relative; overflow: hidden; }
+  .quadrant.style-a { background: #0f0f1a; }
+  .quadrant.style-b { background: #16041e; }
+  .quadrant.style-c { background: #08080c; }
+  .quadrant.style-d { background: #0a1014; }
+
+  .style-label { font-size: 1rem; font-weight: 700; color: rgba(255,255,255,.7); letter-spacing: .15em; text-transform: uppercase; margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 1px solid rgba(255,255,255,.1); }
+  .widgets { display: flex; flex-direction: column; gap: 1rem; }
+
+  /* ──────────────────────────────────────────────────
+     ANIMAÇÕES COMPARTILHADAS
+     ────────────────────────────────────────────────── */
+  @keyframes goldPulseA { 0%,100% { box-shadow: 0 0 18px rgba(253,203,110,.35), 0 8px 24px rgba(0,0,0,.4); } 50% { box-shadow: 0 0 36px rgba(253,203,110,.7), 0 8px 24px rgba(0,0,0,.4); } }
+  @keyframes goldPulseB { 0%,100% { box-shadow: 0 0 25px rgba(253,203,110,.6), inset 0 0 0 2px #fdcb6e; } 50% { box-shadow: 0 0 50px rgba(253,203,110,1), inset 0 0 0 2px #ffd700; } }
+  @keyframes goldPulseC { 0%,100% { box-shadow: 0 0 30px rgba(253,203,110,.15); } 50% { box-shadow: 0 0 50px rgba(253,203,110,.4); } }
+  @keyframes goldPulseD { 0%,100% { box-shadow: 0 0 20px rgba(0,255,234,.4), 0 0 30px rgba(253,203,110,.3); } 50% { box-shadow: 0 0 40px rgba(0,255,234,.7), 0 0 50px rgba(253,203,110,.6); } }
+  @keyframes livePulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
+  @keyframes neonFlash { 0%,100% { border-color: #6c5ce7; box-shadow: 0 0 12px rgba(108,92,231,.6); } 50% { border-color: #fdcb6e; box-shadow: 0 0 20px rgba(253,203,110,.8); } }
+  @keyframes stripes { 0% { background-position: 0 0; } 100% { background-position: 30px 0; } }
+
+  /* ══════════════════════════════════════════════════
+     A. PREMIUM GLASS + GRADIENTES
+     ══════════════════════════════════════════════════ */
+  .style-a .widget-ranking {
+    background: linear-gradient(135deg, rgba(35,35,58,.95), rgba(15,15,26,.98));
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 18px;
+    padding: 1.25rem;
+    box-shadow: 0 12px 40px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06);
+    backdrop-filter: blur(14px);
+  }
+  .style-a .ranking-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .85rem; }
+  .style-a .ranking-header h2 { font-size: 1rem; font-weight: 800; letter-spacing: .15em; color: rgba(255,255,255,.7); text-transform: uppercase; }
+  .style-a .live { display: flex; align-items: center; gap: .3rem; font-size: .65rem; font-weight: 800; color: #ff6b6b; letter-spacing: .15em; }
+  .style-a .live .dot { width: 7px; height: 7px; border-radius: 50%; background: #ff6b6b; animation: livePulse 1.5s infinite; }
+  .style-a .rank-row { display: flex; align-items: center; gap: .75rem; padding: .55rem .65rem; border-radius: 10px; margin-bottom: .3rem; background: rgba(255,255,255,.02); }
+  .style-a .rank-row.first { background: linear-gradient(90deg, rgba(253,203,110,.18), rgba(253,203,110,.04)); border: 1px solid rgba(253,203,110,.4); animation: goldPulseA 1.6s infinite; }
+  .style-a .rank-pos { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem; flex-shrink: 0; }
+  .style-a .rank-pos.p1 { background: linear-gradient(135deg, #fdcb6e, #ffa600); color: #1a1a2e; }
+  .style-a .rank-pos.p2 { background: linear-gradient(135deg, #dfe6e9, #b2bec3); color: #1a1a2e; }
+  .style-a .rank-pos.p3 { background: linear-gradient(135deg, #fab1a0, #e17055); color: #fff; }
+  .style-a .rank-pos.pr { background: rgba(255,255,255,.06); color: rgba(255,255,255,.5); font-size: .85rem; }
+  .style-a .rank-name { flex: 1; font-weight: 700; font-size: 1.05rem; }
+  .style-a .rank-bar { height: 4px; background: rgba(255,255,255,.06); border-radius: 2px; margin-top: 5px; overflow: hidden; }
+  .style-a .rank-bar-fill { height: 100%; background: linear-gradient(90deg, #6c5ce7, #a29bfe); box-shadow: 0 0 8px rgba(108,92,231,.6); }
+  .style-a .first .rank-bar-fill { background: linear-gradient(90deg, #fdcb6e, #ffd700); box-shadow: 0 0 12px rgba(253,203,110,.8); }
+  .style-a .rank-score { font-size: 1.4rem; font-weight: 900; color: #fdcb6e; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+
+  .style-a .widget-buzzers { display: flex; gap: .65rem; padding: .75rem 1rem; background: linear-gradient(135deg, rgba(35,35,58,.95), rgba(15,15,26,.98)); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.4); align-items: center; }
+  .style-a .bo-item { display: flex; align-items: center; gap: .4rem; padding: .3rem .65rem; border-radius: 10px; font-weight: 700; font-size: 1rem; }
+  .style-a .bo-item.first { background: linear-gradient(135deg, rgba(253,203,110,.25), rgba(253,203,110,.08)); border: 2px solid #fdcb6e; animation: goldPulseA 1.6s infinite; }
+  .style-a .bo-pos { background: #6c5ce7; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 900; }
+  .style-a .bo-item.first .bo-pos { background: linear-gradient(135deg, #fdcb6e, #ffa600); color: #1a1a2e; }
+
+  /* ══════════════════════════════════════════════════
+     B. GAME SHOW / SHOW DO MILHÃO
+     ══════════════════════════════════════════════════ */
+  .style-b .widget-ranking { background: linear-gradient(180deg, #2a0a4a 0%, #1a0533 100%); border: 3px solid #6c5ce7; border-radius: 12px; padding: 1rem; animation: neonFlash 2s infinite; }
+  .style-b .ranking-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .85rem; padding-bottom: .5rem; border-bottom: 2px solid rgba(253,203,110,.4); }
+  .style-b .ranking-header h2 { font-size: 1.15rem; font-weight: 900; font-stretch: condensed; letter-spacing: .25em; color: #fdcb6e; text-shadow: 0 0 12px rgba(253,203,110,.7); text-transform: uppercase; }
+  .style-b .live { display: flex; align-items: center; gap: .3rem; font-size: .7rem; font-weight: 900; color: #ff2e2e; letter-spacing: .2em; text-shadow: 0 0 8px rgba(255,46,46,.8); }
+  .style-b .live .dot { width: 9px; height: 9px; border-radius: 50%; background: #ff2e2e; box-shadow: 0 0 10px #ff2e2e; animation: livePulse .8s infinite; }
+  .style-b .rank-row { display: flex; align-items: center; gap: .75rem; padding: .5rem .55rem; margin-bottom: .35rem; border: 1px solid rgba(108,92,231,.3); border-radius: 6px; background: rgba(108,92,231,.08); }
+  .style-b .rank-row.first { background: linear-gradient(90deg, rgba(253,203,110,.3), rgba(253,203,110,.1)); border: 2px solid #fdcb6e; animation: goldPulseB 1.4s infinite; }
+  .style-b .rank-pos { width: 32px; height: 32px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.1rem; flex-shrink: 0; font-stretch: condensed; }
+  .style-b .rank-pos.p1 { background: #fdcb6e; color: #1a1a2e; box-shadow: 0 0 12px rgba(253,203,110,.7); }
+  .style-b .rank-pos.p2 { background: #dfe6e9; color: #1a1a2e; }
+  .style-b .rank-pos.p3 { background: #e17055; color: #fff; }
+  .style-b .rank-pos.pr { background: #2d1b5a; color: #a29bfe; font-size: .85rem; }
+  .style-b .rank-name { flex: 1; font-weight: 800; font-stretch: condensed; font-size: 1.1rem; letter-spacing: .03em; text-transform: uppercase; }
+  .style-b .rank-bar { height: 5px; background: rgba(255,255,255,.08); border-radius: 0; margin-top: 4px; overflow: hidden; }
+  .style-b .rank-bar-fill { height: 100%; background: linear-gradient(90deg, #6c5ce7, #ff2e88); }
+  .style-b .first .rank-bar-fill { background: linear-gradient(90deg, #fdcb6e, #ffd700, #fdcb6e); box-shadow: 0 0 10px #fdcb6e; }
+  .style-b .rank-score { font-size: 1.6rem; font-weight: 900; color: #fdcb6e; text-shadow: 0 0 10px rgba(253,203,110,.6); font-stretch: condensed; font-variant-numeric: tabular-nums; }
+
+  .style-b .widget-buzzers { display: flex; gap: .65rem; padding: .65rem 1rem; background: linear-gradient(180deg, #2a0a4a 0%, #1a0533 100%); border: 3px solid #6c5ce7; border-radius: 10px; animation: neonFlash 2s infinite; align-items: center; }
+  .style-b .bo-item { display: flex; align-items: center; gap: .4rem; padding: .3rem .65rem; border: 2px solid rgba(108,92,231,.4); border-radius: 4px; font-weight: 900; font-stretch: condensed; font-size: 1.05rem; text-transform: uppercase; }
+  .style-b .bo-item.first { background: linear-gradient(135deg, rgba(253,203,110,.3), rgba(253,203,110,.1)); border: 2px solid #fdcb6e; animation: goldPulseB 1.4s infinite; }
+  .style-b .bo-pos { background: #6c5ce7; border-radius: 4px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: .85rem; font-weight: 900; }
+  .style-b .bo-item.first .bo-pos { background: #fdcb6e; color: #1a1a2e; }
+
+  /* ══════════════════════════════════════════════════
+     C. MINIMALISTA ELEGANTE
+     ══════════════════════════════════════════════════ */
+  .style-c .widget-ranking { padding: 1.5rem; background: transparent; }
+  .style-c .ranking-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 1.25rem; padding-bottom: .75rem; border-bottom: 1px solid rgba(255,255,255,.1); }
+  .style-c .ranking-header h2 { font-size: .85rem; font-weight: 500; letter-spacing: .35em; color: rgba(255,255,255,.4); text-transform: uppercase; }
+  .style-c .live { display: flex; align-items: center; gap: .35rem; font-size: .6rem; font-weight: 500; color: rgba(255,255,255,.4); letter-spacing: .25em; }
+  .style-c .live .dot { width: 5px; height: 5px; border-radius: 50%; background: #ff6b6b; animation: livePulse 1.5s infinite; }
+  .style-c .rank-row { display: flex; align-items: baseline; gap: 1rem; padding: .85rem 0; border-bottom: 1px solid rgba(255,255,255,.05); }
+  .style-c .rank-row:last-child { border-bottom: none; }
+  .style-c .rank-row.first { padding: 1.25rem 0; animation: goldPulseC 2s infinite; }
+  .style-c .rank-pos { font-size: 1rem; font-weight: 300; color: rgba(255,255,255,.3); min-width: 36px; }
+  .style-c .rank-row.first .rank-pos { font-size: 1.3rem; font-weight: 400; color: #fdcb6e; }
+  .style-c .rank-pos.medal { font-size: 1.4rem; }
+  .style-c .rank-name { flex: 1; font-weight: 300; font-size: 1.4rem; letter-spacing: -.01em; }
+  .style-c .rank-row.first .rank-name { font-weight: 500; font-size: 1.65rem; }
+  .style-c .rank-score { font-size: 2rem; font-weight: 200; color: #fff; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+  .style-c .rank-row.first .rank-score { font-size: 2.6rem; font-weight: 300; color: #fdcb6e; }
+  .style-c .rank-bar { display: none; }
+
+  .style-c .widget-buzzers { display: flex; gap: 1.5rem; padding: 1rem 0; background: transparent; border-top: 1px solid rgba(255,255,255,.1); align-items: baseline; }
+  .style-c .bo-item { display: flex; align-items: baseline; gap: .5rem; font-weight: 300; font-size: 1.1rem; }
+  .style-c .bo-item.first { animation: goldPulseC 2s infinite; padding: .35rem .75rem; border-radius: 8px; }
+  .style-c .bo-pos { font-size: .75rem; font-weight: 400; color: rgba(255,255,255,.35); }
+  .style-c .bo-item.first .bo-pos { color: #fdcb6e; font-weight: 500; }
+  .style-c .bo-item.first .bo-medal { font-size: 1.3rem; }
+
+  /* ══════════════════════════════════════════════════
+     D. ESPORTS / DASHBOARD MODERNO
+     ══════════════════════════════════════════════════ */
+  .style-d .widget-ranking { background: linear-gradient(135deg, #0d1b1e, #061015); border: 1px solid rgba(0,255,234,.2); clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px)); padding: 1rem 1.25rem; }
+  .style-d .ranking-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 1px solid rgba(0,255,234,.15); }
+  .style-d .ranking-header h2 { font-size: .85rem; font-weight: 800; letter-spacing: .2em; color: #00ffea; text-transform: uppercase; font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+  .style-d .live { display: flex; align-items: center; gap: .35rem; font-size: .65rem; font-weight: 700; color: #ff2e88; letter-spacing: .15em; font-family: 'JetBrains Mono', monospace; }
+  .style-d .live .dot { width: 6px; height: 6px; background: #ff2e88; box-shadow: 0 0 8px #ff2e88; animation: livePulse 1.2s infinite; }
+  .style-d .rank-row { display: flex; align-items: center; gap: .8rem; padding: .55rem .55rem; margin-bottom: .3rem; background: rgba(0,255,234,.03); border-left: 2px solid rgba(0,255,234,.2); clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%); }
+  .style-d .rank-row.first { background: linear-gradient(90deg, rgba(253,203,110,.15), rgba(0,255,234,.05)); border-left: 3px solid #fdcb6e; animation: goldPulseD 1.5s infinite; }
+  .style-d .rank-pos { font-family: 'JetBrains Mono', monospace; font-size: .75rem; font-weight: 800; color: rgba(0,255,234,.6); padding: .15rem .45rem; background: rgba(0,255,234,.08); border-radius: 3px; }
+  .style-d .rank-row.first .rank-pos { background: rgba(253,203,110,.25); color: #fdcb6e; }
+  .style-d .rank-name { flex: 1; font-weight: 700; font-size: 1rem; text-transform: uppercase; letter-spacing: .05em; }
+  .style-d .rank-bar { height: 3px; background: rgba(0,255,234,.08); margin-top: 4px; overflow: hidden; }
+  .style-d .rank-bar-fill { height: 100%; background: linear-gradient(90deg, #00ffea, #ff2e88); background-size: 30px 100%; background-image: repeating-linear-gradient(45deg, #00ffea 0 10px, #00d4c4 10px 20px); animation: stripes 1s linear infinite; }
+  .style-d .first .rank-bar-fill { background: repeating-linear-gradient(45deg, #fdcb6e 0 10px, #ffd700 10px 20px); animation: stripes 1s linear infinite; }
+  .style-d .rank-score { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 1.5rem; font-weight: 800; color: #00ffea; text-shadow: 0 0 8px rgba(0,255,234,.5); font-variant-numeric: tabular-nums; min-width: 40px; text-align: right; }
+  .style-d .first .rank-score { color: #fdcb6e; text-shadow: 0 0 10px rgba(253,203,110,.6); }
+
+  .style-d .widget-buzzers { display: flex; gap: .6rem; padding: .75rem 1rem; background: linear-gradient(135deg, #0d1b1e, #061015); border: 1px solid rgba(0,255,234,.2); clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px)); align-items: center; }
+  .style-d .bo-item { display: flex; align-items: center; gap: .4rem; padding: .25rem .6rem; background: rgba(0,255,234,.06); border-left: 2px solid rgba(0,255,234,.3); font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: .95rem; clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%); }
+  .style-d .bo-item.first { background: linear-gradient(90deg, rgba(253,203,110,.25), rgba(0,255,234,.05)); border-left: 3px solid #fdcb6e; animation: goldPulseD 1.5s infinite; }
+  .style-d .bo-pos { font-size: .7rem; color: rgba(0,255,234,.7); font-weight: 800; }
+  .style-d .bo-item.first .bo-pos { color: #fdcb6e; }
+</style>
+</head>
+<body>
+
+<div class="grid">
+
+  <!-- ════ A. PREMIUM GLASS ════ -->
+  <div class="quadrant style-a">
+    <div class="style-label">A. Premium Glass + Gradientes</div>
+    <div class="widgets">
+      <div class="widget-buzzers">
+        <div class="bo-item first"><span class="bo-pos">1º</span>🥇 Ana</div>
+        <div class="bo-item"><span class="bo-pos">2º</span>🥈 Bob</div>
+        <div class="bo-item"><span class="bo-pos">3º</span>🥉 Carol</div>
+      </div>
+      <div class="widget-ranking">
+        <div class="ranking-header"><h2>🏆 Ranking</h2><span class="live"><span class="dot"></span>AO VIVO</span></div>
+        <div class="rank-row first"><div class="rank-pos p1">🥇</div><div style="flex:1;"><div class="rank-name">Ana</div><div class="rank-bar"><div class="rank-bar-fill" style="width:100%"></div></div></div><div class="rank-score">27</div></div>
+        <div class="rank-row"><div class="rank-pos p2">🥈</div><div style="flex:1;"><div class="rank-name">Bob</div><div class="rank-bar"><div class="rank-bar-fill" style="width:66%"></div></div></div><div class="rank-score">18</div></div>
+        <div class="rank-row"><div class="rank-pos p3">🥉</div><div style="flex:1;"><div class="rank-name">Carol</div><div class="rank-bar"><div class="rank-bar-fill" style="width:44%"></div></div></div><div class="rank-score">12</div></div>
+        <div class="rank-row"><div class="rank-pos pr">4º</div><div style="flex:1;"><div class="rank-name">David</div><div class="rank-bar"><div class="rank-bar-fill" style="width:18%"></div></div></div><div class="rank-score">5</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ B. GAME SHOW ════ -->
+  <div class="quadrant style-b">
+    <div class="style-label">B. Game Show / Show do Milhão</div>
+    <div class="widgets">
+      <div class="widget-buzzers">
+        <div class="bo-item first"><span class="bo-pos">1º</span>🥇 Ana</div>
+        <div class="bo-item"><span class="bo-pos">2º</span>🥈 Bob</div>
+        <div class="bo-item"><span class="bo-pos">3º</span>🥉 Carol</div>
+      </div>
+      <div class="widget-ranking">
+        <div class="ranking-header"><h2>🏆 Ranking</h2><span class="live"><span class="dot"></span>AO VIVO</span></div>
+        <div class="rank-row first"><div class="rank-pos p1">🥇</div><div style="flex:1;"><div class="rank-name">Ana</div><div class="rank-bar"><div class="rank-bar-fill" style="width:100%"></div></div></div><div class="rank-score">27</div></div>
+        <div class="rank-row"><div class="rank-pos p2">🥈</div><div style="flex:1;"><div class="rank-name">Bob</div><div class="rank-bar"><div class="rank-bar-fill" style="width:66%"></div></div></div><div class="rank-score">18</div></div>
+        <div class="rank-row"><div class="rank-pos p3">🥉</div><div style="flex:1;"><div class="rank-name">Carol</div><div class="rank-bar"><div class="rank-bar-fill" style="width:44%"></div></div></div><div class="rank-score">12</div></div>
+        <div class="rank-row"><div class="rank-pos pr">4º</div><div style="flex:1;"><div class="rank-name">David</div><div class="rank-bar"><div class="rank-bar-fill" style="width:18%"></div></div></div><div class="rank-score">5</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ C. MINIMALISTA ════ -->
+  <div class="quadrant style-c">
+    <div class="style-label">C. Minimalista Elegante</div>
+    <div class="widgets">
+      <div class="widget-buzzers">
+        <div class="bo-item first"><span class="bo-pos">1º</span><span class="bo-medal">🥇</span> Ana</div>
+        <div class="bo-item"><span class="bo-pos">2º</span> Bob</div>
+        <div class="bo-item"><span class="bo-pos">3º</span> Carol</div>
+      </div>
+      <div class="widget-ranking">
+        <div class="ranking-header"><h2>Ranking</h2><span class="live"><span class="dot"></span>AO VIVO</span></div>
+        <div class="rank-row first"><div class="rank-pos medal">🥇</div><div class="rank-name">Ana</div><div class="rank-score">27</div></div>
+        <div class="rank-row"><div class="rank-pos">2º</div><div class="rank-name">Bob</div><div class="rank-score">18</div></div>
+        <div class="rank-row"><div class="rank-pos">3º</div><div class="rank-name">Carol</div><div class="rank-score">12</div></div>
+        <div class="rank-row"><div class="rank-pos">4º</div><div class="rank-name">David</div><div class="rank-score">5</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ D. ESPORTS ════ -->
+  <div class="quadrant style-d">
+    <div class="style-label">D. Esports / Dashboard Moderno</div>
+    <div class="widgets">
+      <div class="widget-buzzers">
+        <div class="bo-item first"><span class="bo-pos">P01</span>🥇 Ana</div>
+        <div class="bo-item"><span class="bo-pos">P02</span>🥈 Bob</div>
+        <div class="bo-item"><span class="bo-pos">P03</span>🥉 Carol</div>
+      </div>
+      <div class="widget-ranking">
+        <div class="ranking-header"><h2>// Leaderboard</h2><span class="live"><span class="dot"></span>LIVE</span></div>
+        <div class="rank-row first"><div class="rank-pos">P01</div><div style="flex:1;"><div class="rank-name">Ana</div><div class="rank-bar"><div class="rank-bar-fill" style="width:100%"></div></div></div><div class="rank-score">27</div></div>
+        <div class="rank-row"><div class="rank-pos">P02</div><div style="flex:1;"><div class="rank-name">Bob</div><div class="rank-bar"><div class="rank-bar-fill" style="width:66%"></div></div></div><div class="rank-score">18</div></div>
+        <div class="rank-row"><div class="rank-pos">P03</div><div style="flex:1;"><div class="rank-name">Carol</div><div class="rank-bar"><div class="rank-bar-fill" style="width:44%"></div></div></div><div class="rank-score">12</div></div>
+        <div class="rank-row"><div class="rank-pos">P04</div><div style="flex:1;"><div class="rank-name">David</div><div class="rank-bar"><div class="rank-bar-fill" style="width:18%"></div></div></div><div class="rank-score">5</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

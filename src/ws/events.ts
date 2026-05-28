@@ -108,12 +108,16 @@ export function setupSocketEvents(io: Server) {
       const room = findRoomById(clientData.room_id);
       if (!room) return;
 
+      const player = listRoomPlayers(clientData.room_id).find(p => p.user_id === data.player_id);
+      const playerName = player?.name ?? data.player_id;
+
       // Só manda resposta pro apresentador
       const presenterSocketId = getPresenterSocketId(io, clientData.room_id, room.presenter_id);
       if (presenterSocketId) {
         io.to(presenterSocketId).emit('resposta:atualizada', {
           round_id: data.round_id,
           player_id: data.player_id,
+          player_name: playerName,
           text: data.text,
         });
       }
@@ -198,6 +202,11 @@ function emitRoomStatus(io: Server, roomId: string) {
       status: currentRound.status,
       media_url: currentRound.media_url,
       buzzer_order: getBuzzerOrder(currentRound.id),
+      answers: getRoundAnswers(currentRound.id).map(a => ({
+        player_id: a.player_id,
+        player_name: a.player_name,
+        text: a.text,
+      })),
     } : null,
   });
 }

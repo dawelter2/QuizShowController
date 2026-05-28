@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jogador — Quiz Show</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #e0e0e0; min-height: 100vh; }
+  input, button, textarea { font: inherit; }
+  button { -webkit-tap-highlight-color: transparent; }
+  .hidden { display: none !important; }
+
+  .content-center { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100vh - 60px); text-align: center; padding: 1rem; }
+
+  .buzzer-btn { position: relative; overflow: hidden; width: 200px; height: 200px; border-radius: 50%; border: none; font-size: 2rem; font-weight: 800; cursor: pointer; transition: all .15s; margin: 1rem auto; display: block; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; user-select: none; }
+  .buzzer-active { background: #d63031; color: #fff; box-shadow: 0 0 40px rgba(214,48,49,.5); animation: pulse 1s infinite; }
+  .buzzer-pressed { background: #fdcb6e; color: #1a1a2e; }
+  .buzzer-disabled { background: #2d2d2d; color: #636e72; }
+  .buzzer-activated { animation: activateBounce .45s ease-out, pulse 1s infinite .45s; }
+  .first-buzz { box-shadow: 0 0 0 4px #fdcb6e, 0 0 30px rgba(253,203,110,.9) !important; animation: goldPulse 1.2s ease-in-out infinite !important; }
+
+  @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+  @keyframes activateBounce { 0% { transform: scale(.7); filter: brightness(1.6); } 55% { transform: scale(1.18); } 100% { transform: scale(1); filter: brightness(1); } }
+  @keyframes goldPulse { 0%,100% { box-shadow: 0 0 0 4px #fdcb6e, 0 0 18px rgba(253,203,110,.5); } 50% { box-shadow: 0 0 0 4px #fdcb6e, 0 0 36px rgba(253,203,110,1); } }
+
+  .ripple { position: absolute; border-radius: 50%; background: rgba(255,255,255,.5); transform: translate(-50%,-50%) scale(0); width: 240px; height: 240px; pointer-events: none; animation: rippleAnim .5s ease-out forwards; }
+  @keyframes rippleAnim { 0% { transform: translate(-50%,-50%) scale(0); opacity: .55; } 100% { transform: translate(-50%,-50%) scale(2.2); opacity: 0; } }
+
+  .round-go { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 1000; opacity: 0; }
+  .round-go .go-text { font-size: clamp(6rem, 22vw, 14rem); font-weight: 900; color: #fdcb6e; text-shadow: 0 0 40px rgba(253,203,110,.9), 0 0 80px rgba(253,203,110,.4); transform: scale(.3); letter-spacing: .05em; }
+  .round-go.show { animation: goPop .6s ease-out forwards; }
+  .round-go.show .go-text { animation: goText .6s ease-out forwards; }
+  @keyframes goPop { 0% { opacity: 0; } 25% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+  @keyframes goText { 0% { transform: scale(.3); } 40% { transform: scale(1.18); } 70% { transform: scale(1); } 100% { transform: scale(1.05); } }
+
+  .buzzer-order { display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap; margin: 1rem 0; }
+  .buzzer-order .pos { background: #2a2a3e; border-radius: 8px; padding: .5rem 1rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
+  .buzzer-order .pos .num { background: #6c5ce7; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: .8rem; }
+
+  .score-card { background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 8px; padding: 1rem; text-align: center; width: 100%; max-width: 300px; }
+  .score-card .name { font-size: .85rem; color: #888; }
+  .score-card .score { font-size: 1.75rem; font-weight: 800; color: #fdcb6e; }
+
+  .nav-bar { display: flex; justify-content: space-between; align-items: center; padding: .75rem 1rem; background: #1a1a2e; border-bottom: 1px solid #2a2a3e; }
+
+  .toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: #1a1a2e; border: 1px solid #2a2a3e; padding: .75rem 1.5rem; border-radius: 8px; font-size: .9rem; z-index: 100; }
+
+  .dropdown { position: relative; display: inline-block; }
+  .dropdown-btn { background: none; border: 1px solid #2a2a3e; color: #a0a0b8; padding: .4rem .75rem; border-radius: 6px; cursor: pointer; font-size: .85rem; }
+  .dropdown-btn:hover { background: #2a2a3e; }
+  .dropdown-menu { position: absolute; top: 100%; right: 0; background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 8px; min-width: 170px; z-index: 50; display: none; overflow: hidden; margin-top: 4px; }
+  .dropdown-menu.show { display: block; }
+  .dropdown-menu button { display: block; width: 100%; padding: .6rem 1rem; text-align: left; border: none; background: none; color: #e0e0e0; font-size: .85rem; cursor: pointer; }
+  .dropdown-menu button:hover { background: #2a2a3e; }
+  .dropdown-menu .divider { height: 1px; background: #2a2a3e; margin: .25rem 0; }
+
+  textarea { width: 100%; max-width: 400px; padding: .75rem; border-radius: 8px; border: 1px solid #2a2a3e; background: #16162a; color: #e0e0e0; font-size: 1rem; resize: none; height: 80px; outline: none; }
+  textarea:focus { border-color: #6c5ce7; }
+</style>
+</head>
+<body>
+
+<div class="round-go" id="round-go"><div class="go-text">GO!</div></div>
+
+<div class="nav-bar">
+  <span><strong>🎬 <span id="player-room-title"></span></strong></span>
+  <span style="font-size:.85rem;color:#888;">Olá, <span id="player-name"></span></span>
+  <div class="dropdown">
+    <button class="dropdown-btn" onclick="toggleMenu('player-menu')">☰ Menu</button>
+    <div class="dropdown-menu" id="player-menu">
+      <button onclick="handleLeaveRoom()">🚪 Sair da Sala</button>
+      <div class="divider"></div>
+      <button onclick="handleChangeName()">✏️ Mudar Nome</button>
+    </div>
+  </div>
+</div>
+
+<div class="content-center">
+  <div class="score-card">
+    <div class="name">Seus Pontos</div>
+    <div class="score" id="player-score">0</div>
+  </div>
+  <button class="buzzer-btn buzzer-disabled" id="player-buzzer" disabled onmousedown="handleBuzz(event)">🔔</button>
+  <textarea id="player-answer" placeholder="Digite sua resposta..." disabled></textarea>
+  <div id="player-buzzer-order" class="buzzer-order"></div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/jogador.js"></script>
+</body>
+</html>
