@@ -190,10 +190,10 @@ function emitRoomStatus(io: Server, roomId: string) {
       status: room.status,
     },
     players: players.map(p => ({
-      id: p.user_id,
+      user_id: p.user_id,
       name: p.name,
       role: p.role,
-      score: p.score_cache,
+      score_cache: p.score_cache,
     })),
     scores,
     current_round: currentRound ? {
