@@ -57,18 +57,15 @@ function renderPresenterScores(scores) {
   scores.forEach(s => {
     const el = $('ps-' + s.player_id);
     if (el) el.textContent = s.score;
+    // Atualiza o cache local para evitar reversão no re-render (ex: próxima rodada)
+    const p = state.players?.find(p => p.user_id === s.player_id);
+    if (p) p.score_cache = s.score;
   });
 }
 
 function renderBuzzerOrder(order) {
-  // A ordem agora é renderizada dentro de renderPresenterPlayers
-  const players = Array.from(document.querySelectorAll('.player-card[id^="pp-"]')).map(el => {
-    const id = el.id.replace('pp-', '');
-    const name = el.querySelector('.name').textContent;
-    const score = parseInt(el.querySelector('.score').textContent);
-    return { user_id: id, name, score_cache: score, role: 'player' };
-  });
-  renderPresenterPlayers(players);
+  // A ordem agora é renderizada dentro de renderPresenterPlayers usando o estado sincronizado
+  if (state.players) renderPresenterPlayers(state.players);
 }
 
 function renderAnswers() {
