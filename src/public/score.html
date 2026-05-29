@@ -320,10 +320,12 @@
 
     var html = '';
     sorted.forEach(function(s, i){
-      var pos = i + 1;
-      var posText = ['🥇','🥈','🥉'][i] || pos + 'º';
+      // Calcula posição real baseada em empates (Standard Competition Ranking)
+      var pos = sorted.filter(function(other){ return other.score > s.score; }).length + 1;
+      
+      var posText = ['🥇','🥈','🥉'][pos - 1] || pos + 'º';
       var pct = Math.max((s.score / maxScore) * 100, 4);
-      var firstCls = i === 0 ? ' first-place' : '';
+      var firstCls = pos === 1 ? ' first-place' : '';
       var prevScore = prevDisplayedScores[s.player_id];
       var initialScore = (prevScore !== undefined) ? prevScore : s.score;
 
@@ -415,10 +417,15 @@
   if (!roomCode) { log('Sem codigo'); document.getElementById('round-label').textContent='⚠️ Sem sala'; return; }
 
   fetch('/api/rooms/' + roomCode)
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      if (!data.room) { log('Sala nao encontrada'); return; }
-      log('Conectando...');
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (!data.room) { log('Sala nao encontrada'); return; }
+
+    var roomTitle = data.room.title || 'Quiz Show';
+    document.title = roomTitle + ' — Transmissão';
+
+    log('Conectando...');
+
       var socket = io('/', { query: { room_id: data.room.id, user_id: 'score-' + roomCode } });
 
       socket.on('connect', function(){ log('Conectado!'); });

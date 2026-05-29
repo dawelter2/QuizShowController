@@ -118,6 +118,7 @@ export function createRoom(presenterId: string, title: string, notes: string): R
   const now = new Date().toISOString();
   const room: Room = { id, code, presenter_id: presenterId, title, notes, status: 'waiting', created_at: now, ended_at: null };
   roomsMap.set(id, room);
+  console.log(`[DEBUG] Sala criada: ${title} (${code})`);
   roomCodeIndex.set(code, id);
   roomPlayersMap.set(id, new Map());
   roomRoundsMap.set(id, []);
@@ -132,6 +133,12 @@ export function findRoomByCode(code: string): Room | undefined {
 
 export function findRoomById(id: string): Room | undefined {
   return roomsMap.get(id);
+}
+
+export function listActiveRooms(): Room[] {
+  return Array.from(roomsMap.values())
+    .filter(r => r.status === 'waiting' || r.status === 'playing')
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
 export function updateRoom(id: string, data: { title?: string; notes?: string }): Room | undefined {

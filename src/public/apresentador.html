@@ -35,13 +35,19 @@
   .mt-1 { margin-top: 1rem; }
   .mb-1 { margin-bottom: 1rem; }
 
-  .player-card { background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 8px; padding: 1rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; }
-  .player-card .name { font-weight: 600; }
-  .player-card .score { font-size: 1.25rem; font-weight: 700; color: #fdcb6e; }
+  .player-card { background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 8px; padding: 1rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; transition: all 0.2s ease; }
+  .player-card .name { font-weight: 700; font-size: 1.4rem; color: #fff; }
+  .player-card .score { font-size: 1.5rem; font-weight: 800; color: #fdcb6e; }
   .player-card .score-actions { display: flex; gap: .25rem; }
   .player-card .score-actions button { width: 36px; height: 36px; border-radius: 6px; border: none; cursor: pointer; font-weight: 700; font-size: .9rem; }
   .btn-plus { background: #00b894; color: #fff; }
   .btn-minus { background: #d63031; color: #fff; }
+
+  /* Destaque para quem buzinou */
+  .player-card.is-buzzed { border-color: #6c5ce7; background: #232342; }
+  .player-card.is-first-buzz { border-color: #fdcb6e; box-shadow: 0 0 15px rgba(253,203,110,0.4); background: linear-gradient(90deg, #1a1a2e, #2a2a4a); }
+  .player-card .buzz-pos { background: #6c5ce7; color: #fff; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.9rem; font-weight: 800; margin-right: 0.75rem; }
+  .player-card.is-first-buzz .buzz-pos { background: #fdcb6e; color: #1a1a2e; }
 
   .buzzer-order { display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap; margin: 1rem 0; }
   .buzzer-order .pos { background: #2a2a3e; border-radius: 8px; padding: .5rem 1rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
@@ -69,6 +75,12 @@
   .dropdown-menu button { display: block; width: 100%; padding: .6rem 1rem; text-align: left; border: none; background: none; color: #e0e0e0; font-size: .85rem; cursor: pointer; }
   .dropdown-menu button:hover { background: #2a2a3e; }
   .dropdown-menu .divider { height: 1px; background: #2a2a3e; margin: .25rem 0; }
+
+  /* Novos estilos de status */
+  .status-bar { display: flex; gap: .5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+  .badge { display: inline-flex; align-items: center; padding: .4rem .75rem; border-radius: 6px; font-size: .85rem; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
+  .badge-outline { background: #16162a; border: 1px solid #2a2a3e; color: #a0a0b8; }
+  .badge-primary { background: #6c5ce7; color: #fff; box-shadow: 0 2px 8px rgba(108,92,231,.3); }
 </style>
 </head>
 <body>
@@ -96,15 +108,12 @@
     <button class="btn btn-success" id="btn-start-round" onclick="handleStartRound()">▶ Começar Rodada</button>
     <button class="btn btn-warning" id="btn-next-round" onclick="handleNextRound()" disabled>⏭ Próxima Rodada</button>
   </div>
-  <div id="pres-round-info" class="hidden card">
-    <p style="color:#6c5ce7;font-weight:600;">Rodada <span id="pres-round-num">1</span></p>
-    <input type="text" id="pres-media-url" placeholder="Link do YouTube/imagem (opcional)">
-    <input type="text" id="pres-correct-answer" placeholder="Resposta correta (opcional)" class="mt-1">
+  <div class="status-bar" id="pres-round-info">
+    <span class="badge badge-outline" id="pres-round-room-title"></span>
+    <span class="badge badge-primary">Rodada <span id="pres-round-num">1</span></span>
   </div>
   <h2 style="margin-top:1rem;">🏆 Placar</h2>
   <div id="pres-players"></div>
-  <h2 style="margin-top:1rem;">📋 Ordem das Buzinas</h2>
-  <div id="pres-buzzer-order" class="buzzer-order"><p style="color:#636e72;">Aguardando...</p></div>
   <h2 style="margin-top:1rem;">✍️ Respostas</h2>
   <div id="pres-answers"></div>
 </div>

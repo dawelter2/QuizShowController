@@ -4,6 +4,7 @@ function show(screen) {
     if (el) el.classList.add('hidden');
   });
   $(screen).classList.remove('hidden');
+  if (screen === 'screen-lobby') showLobbyMain();
 }
 
 function handleLogin() {
@@ -30,12 +31,60 @@ function handleLogout() {
 }
 
 function showJoinRoom() {
+  $('lobby-main-actions').classList.add('hidden');
+  $('create-form').classList.add('hidden');
   $('join-form').classList.remove('hidden');
   $('join-code').focus();
+  refreshActiveRooms();
+}
+
+function showCreateRoom() {
+  $('lobby-main-actions').classList.add('hidden');
+  $('join-form').classList.add('hidden');
+  $('create-form').classList.remove('hidden');
+  $('room-name').focus();
+}
+
+function showLobbyMain() {
+  $('join-form').classList.add('hidden');
+  $('create-form').classList.add('hidden');
+  $('lobby-main-actions').classList.remove('hidden');
+}
+
+function refreshActiveRooms() {
+  const list = $('active-rooms-list');
+  list.innerHTML = '<p style="text-align:center; padding: 1rem; color: #666;">Buscando salas...</p>';
+
+  api('/rooms').then(res => {
+    if (!res.rooms || res.rooms.length === 0) {
+      list.innerHTML = '<p style="text-align:center; padding: 1rem; color: #666;">Nenhuma sala ativa no momento.</p>';
+      return;
+    }
+
+    list.innerHTML = '';
+    res.rooms.forEach(room => {
+      const item = document.createElement('div');
+      item.className = 'room-item';
+      item.onclick = () => joinRoomByCode(room.code);
+      item.innerHTML = `
+        <div class="room-info">
+          <span class="room-title">${escapeHtml(room.title || 'Sala sem nome')}</span>
+          <span class="room-meta">${room.player_count} jogador(es)</span>
+        </div>
+        <div class="room-code-badge">${room.code}</div>
+      `;
+      list.appendChild(item);
+    });
+  }).catch(err => {
+    list.innerHTML = '<p style="text-align:center; padding: 1rem; color: #f55;">Erro ao carregar salas.</p>';
+  });
 }
 
 function handleCreateRoom() {
-  api('/rooms', { user_id: state.user.id }).then(res => {
+  const title = $('room-name').value.trim();
+  if (!title) return toast('Dê um nome para a sala');
+
+  api('/rooms', { user_id: state.user.id, title }).then(res => {
     if (!res.room) return toast('Erro ao criar sala: ' + (res.error || 'desconhecido'));
     localStorage.setItem('last_room_code', res.room.code);
     location.href = '/apresentador?sala=' + res.room.code;
@@ -45,6 +94,10 @@ function handleCreateRoom() {
 function handleJoinRoom() {
   const code = $('join-code').value.trim().toUpperCase();
   if (!code || code.length !== 4) return toast('Código inválido');
+  joinRoomByCode(code);
+}
+
+function joinRoomByCode(code) {
   api('/rooms/' + code).then(res => {
     if (!res.room) return toast('Sala não encontrada');
     if (res.room.status === 'finished') return toast('Sala encerrada');

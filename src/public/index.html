@@ -28,6 +28,15 @@
   input[type="text"] { width: 100%; padding: .75rem 1rem; border-radius: 8px; border: 1px solid #2a2a3e; background: #16162a; color: #e0e0e0; font-size: 1rem; outline: none; transition: border .15s; }
   input[type="text"]:focus { border-color: #6c5ce7; }
 
+  .room-list { margin-top: 1.5rem; text-align: left; border-top: 1px solid #2a2a3e; padding-top: 1rem; }
+  .room-list h2 { font-size: 1rem; margin-bottom: 1rem; color: #888; text-transform: uppercase; letter-spacing: 0.05rem; }
+  .room-item { background: #16162a; border: 1px solid #2a2a3e; border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between; transition: border-color 0.15s; cursor: pointer; }
+  .room-item:hover { border-color: #6c5ce7; background: #1d1d36; }
+  .room-info { flex: 1; }
+  .room-title { font-weight: 600; color: #fff; display: block; }
+  .room-meta { font-size: 0.8rem; color: #888; }
+  .room-code-badge { background: #6c5ce722; color: #6c5ce7; padding: 0.25rem 0.5rem; border-radius: 4px; font-weight: 700; font-family: monospace; font-size: 1.1rem; }
+
   .mt-1 { margin-top: 1rem; }
   .mb-1 { margin-bottom: 1rem; }
 
@@ -49,15 +58,35 @@
   </div>
 
   <div id="screen-lobby" class="screen screen-center hidden">
-    <div style="max-width: 400px;">
+    <div style="max-width: 400px; width: 100%;">
       <h1>Olá, <span id="lobby-name"></span>!</h1>
       <p>O que você quer fazer?</p>
       <div class="card">
-        <button class="btn btn-primary mb-1" onclick="handleCreateRoom()">🎯 Criar Sala</button>
-        <button class="btn btn-outline" onclick="showJoinRoom()">🔗 Entrar em uma Sala</button>
-        <div id="join-form" class="hidden mt-1">
-          <input type="text" id="join-code" placeholder="Código da sala" maxlength="4" style="text-transform:uppercase;text-align:center;font-size:1.5rem;letter-spacing:.5rem;" onkeydown="if(event.key==='Enter') handleJoinRoom()">
+        <div id="lobby-main-actions">
+          <button class="btn btn-primary mb-1" onclick="showCreateRoom()">🎯 Criar Sala</button>
+          <button class="btn btn-outline" onclick="showJoinRoom()">🔗 Entrar em uma Sala</button>
+        </div>
+
+        <div id="create-form" class="hidden">
+          <p style="margin-bottom: 0.5rem; font-weight: 600;">Nome da sua Sala</p>
+          <input type="text" id="room-name" placeholder="Ex: Quiz da Galera" maxlength="50" onkeydown="if(event.key==='Enter') handleCreateRoom()">
+          <button class="btn btn-success mt-1" onclick="handleCreateRoom()">Criar Agora</button>
+          <button class="btn btn-outline mt-1" onclick="showLobbyMain()" style="border:none;background:transparent;">Voltar</button>
+        </div>
+
+        <div id="join-form" class="hidden">
+          <p style="margin-bottom: 0.5rem; font-weight: 600;">Digite o Código</p>
+          <input type="text" id="join-code" placeholder="CÓDIGO" maxlength="4" style="text-transform:uppercase;text-align:center;font-size:1.5rem;letter-spacing:.5rem;" onkeydown="if(event.key==='Enter') handleJoinRoom()">
           <button class="btn btn-success mt-1" onclick="handleJoinRoom()">Entrar</button>
+
+          <div class="room-list">
+            <h2>Salas Ativas</h2>
+            <div id="active-rooms-list">
+              <p style="text-align:center; padding: 1rem;">Buscando salas...</p>
+            </div>
+          </div>
+
+          <button class="btn btn-outline mt-1" onclick="showLobbyMain()" style="border:none;background:transparent;">Voltar</button>
         </div>
       </div>
       <button class="btn btn-outline mt-1" onclick="handleLogout()" style="width:auto;padding:.5rem 1rem;font-size:.85rem;">Sair</button>

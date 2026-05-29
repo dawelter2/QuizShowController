@@ -23,6 +23,7 @@ function applyRoundSnapshot(round) {
   const buzzer = $('player-buzzer');
   if (round && round.status === 'active') {
     state.currentRoundId = round.id;
+    $('player-status-round-num').textContent = round.round_number;
     const order = round.buzzer_order || [];
     const myBuzz = order.find(o => o.player_id === state.user.id);
     setBuzzerState(myBuzz ? 'pressed' : 'active');
@@ -54,6 +55,41 @@ function handleBuzz(event) {
   });
 }
 
+function updatePlayerRank(scores) {
+  if (!scores || !scores.length || !state.user) return;
+  
+  const sorted = [...scores].sort((a, b) => b.score - a.score);
+  const myScoreEntry = scores.find(s => s.player_id === state.user.id);
+  if (!myScoreEntry) return;
+
+  const myScore = myScoreEntry.score;
+  
+  // Rank baseado em quantos jogadores têm score estritamente maior (Standard Competition Ranking)
+  const myRank = sorted.filter(s => s.score > myScore).length + 1;
+  
+  // Encontrar max e min para lógica de destaque
+  const allScores = scores.map(s => s.score);
+  const maxScore = Math.max(...allScores);
+  const minScore = Math.min(...allScores);
+
+  const rankEl = $('player-rank');
+  const cardEl = $('player-score-card');
+  
+  rankEl.textContent = myRank + 'º';
+  
+  // Reset de classes
+  cardEl.classList.remove('is-first', 'is-last');
+
+  // Só aplica destaque se houver diferença de pontos na sala
+  if (maxScore !== minScore) {
+    if (myScore === maxScore) {
+      cardEl.classList.add('is-first');
+    } else if (myScore === minScore) {
+      cardEl.classList.add('is-last');
+    }
+  }
+}
+
 function connectPlayerSocket() {
   state.socket = io('/', { query: { room_id: state.room.id, user_id: state.user.id } });
 
@@ -66,13 +102,16 @@ function connectPlayerSocket() {
   state.socket.on('sala:status', (data) => {
     state.room = { ...state.room, ...data.room };
     $('player-room-title').textContent = state.room.title || 'Quiz';
+    $('player-status-room-title').textContent = state.room.title || 'Quiz';
     const me = data.scores?.find(s => s.player_id === state.user.id);
     if (me) $('player-score').textContent = me.score;
+    updatePlayerRank(data.scores);
     applyRoundSnapshot(data.current_round);
   });
 
   state.socket.on('rodada:iniciada', (data) => {
     state.currentRoundId = data.round_id;
+    $('player-status-round-num').textContent = data.round_number;
     setBuzzerState('active');
     $('player-answer').disabled = false;
     $('player-answer').value = '';
@@ -101,6 +140,7 @@ function connectPlayerSocket() {
   state.socket.on('placar:atualizado', (data) => {
     const me = data.scores.find(s => s.player_id === state.user.id);
     if (me) $('player-score').textContent = me.score;
+    updatePlayerRank(data.scores);
   });
 
   state.socket.on('rodada:proxima', () => {
@@ -137,7 +177,10 @@ setupAuth()
       return;
     }
     $('player-name').textContent = state.user.name;
-    $('player-room-title').textContent = room.title || 'Quiz';
+    const roomTitle = room.title || 'Quiz';
+    $('player-room-title').textContent = roomTitle;
+    $('player-status-room-title').textContent = roomTitle;
+    document.title = roomTitle + ' — Jogador';
     return api('/rooms/' + room.id + '/players', { user_id: state.user.id })
       .then(() => connectPlayerSocket());
   })

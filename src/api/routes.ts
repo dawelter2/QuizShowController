@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import {
   createUser, findUserBySession, updateLastSeen,
-  createRoom, findRoomByCode, findRoomById, updateRoom, closeRoom,
+  createRoom, findRoomByCode, findRoomById, listActiveRooms, updateRoom, closeRoom,
   addPlayerToRoom, removePlayerFromRoom, listRoomPlayers,
 } from '../store/queries.js';
 
@@ -32,6 +32,19 @@ router.post('/auth', (req: Request, res: Response) => {
 });
 
 // ─── Rooms ──────────────────────────────────────────
+
+router.get('/rooms', (req: Request, res: Response) => {
+  const rooms = listActiveRooms();
+  console.log(`[DEBUG] Listando ${rooms.length} salas ativas`);
+  const roomsWithPlayers = rooms.map((room: any) => {
+    const players = listRoomPlayers(room.id);
+    return {
+      ...room,
+      player_count: players.filter((p: any) => p.role === 'player').length
+    };
+  });
+  res.json({ rooms: roomsWithPlayers });
+});
 
 router.post('/rooms', (req: Request, res: Response) => {
   const { user_id, title, notes } = req.body;

@@ -4,24 +4,52 @@ state.answers = {};
 state.buzzerOrder = [];
 
 function renderPresenterPlayers(players) {
+  state.players = players; // Salva para re-render
   const container = $('pres-players');
   if (!players || players.length === 0) {
     container.innerHTML = '<p style="color:#636e72;">Nenhum jogador conectado</p>';
     return;
   }
-  container.innerHTML = players.filter(p => p.role === 'player').map(p => `
-    <div class="player-card" id="pp-${p.user_id}">
-      <div><span class="name">${escapeHtml(p.name)}</span></div>
-      <div style="display:flex;align-items:center;gap:.75rem;">
-        <span class="score" id="ps-${p.user_id}">${p.score_cache}</span>
-        <div class="score-actions">
-          <button class="btn-plus" onclick="changeScore('${p.user_id}', 3)">+3</button>
-          <button class="btn-plus" onclick="changeScore('${p.user_id}', 1)">+1</button>
-          <button class="btn-minus" onclick="changeScore('${p.user_id}', -2)">-2</button>
+
+  const order = state.buzzerOrder || [];
+  
+  // Criar lista enriquecida com info de buzina
+  const enrichedPlayers = players.filter(p => p.role === 'player').map(p => {
+    const buzzInfo = order.find(o => o.player_id === p.user_id);
+    return { ...p, buzzPos: buzzInfo?.position };
+  });
+
+  // Reordenar: quem buzinou primeiro no topo, depois por nome
+  enrichedPlayers.sort((a, b) => {
+    if (a.buzzPos && b.buzzPos) return a.buzzPos - b.buzzPos;
+    if (a.buzzPos) return -1;
+    if (b.buzzPos) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  container.innerHTML = enrichedPlayers.map(p => {
+    const isBuzzed = !!p.buzzPos;
+    const isFirst = p.buzzPos === 1;
+    const cls = `player-card ${isBuzzed ? 'is-buzzed' : ''} ${isFirst ? 'is-first-buzz' : ''}`;
+    const buzzHtml = isBuzzed ? `<span class="buzz-pos">${p.buzzPos}º</span>` : '';
+    
+    return `
+      <div class="${cls}" id="pp-${p.user_id}">
+        <div style="display:flex;align-items:center;">
+          ${buzzHtml}
+          <span class="name">${escapeHtml(p.name)}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:.75rem;">
+          <span class="score" id="ps-${p.user_id}">${p.score_cache}</span>
+          <div class="score-actions">
+            <button class="btn-plus" onclick="changeScore('${p.user_id}', 3)">+3</button>
+            <button class="btn-plus" onclick="changeScore('${p.user_id}', 1)">+1</button>
+            <button class="btn-minus" onclick="changeScore('${p.user_id}', -2)">-2</button>
+          </div>
         </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 function renderPresenterScores(scores) {
@@ -33,17 +61,14 @@ function renderPresenterScores(scores) {
 }
 
 function renderBuzzerOrder(order) {
-  if (!order || order.length === 0) {
-    $('pres-buzzer-order').innerHTML = '<p style="color:#636e72;">Aguardando jogadores...</p>';
-    return;
-  }
-  const medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
-  const html = order.map(o => {
-    const medal = medals[o.position] || '';
-    const cls = o.position === 1 ? 'pos first-buzz' : 'pos';
-    return `<span class="${cls}"><span class="num">${o.position}º</span> ${medal} ${escapeHtml(o.player_name)}</span>`;
-  }).join('');
-  $('pres-buzzer-order').innerHTML = `<div style="display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;">${html}</div>`;
+  // A ordem agora é renderizada dentro de renderPresenterPlayers
+  const players = Array.from(document.querySelectorAll('.player-card[id^="pp-"]')).map(el => {
+    const id = el.id.replace('pp-', '');
+    const name = el.querySelector('.name').textContent;
+    const score = parseInt(el.querySelector('.score').textContent);
+    return { user_id: id, name, score_cache: score, role: 'player' };
+  });
+  renderPresenterPlayers(players);
 }
 
 function renderAnswers() {
@@ -78,7 +103,6 @@ function applyRoundSnapshot(round) {
       state.answers[a.player_id] = { player_name: a.player_name, text: a.text };
     });
     $('pres-round-num').textContent = round.round_number;
-    $('pres-round-info').classList.remove('hidden');
     $('btn-start-round').disabled = true;
     $('btn-next-round').disabled = false;
     renderBuzzerOrder(state.buzzerOrder);
@@ -87,7 +111,6 @@ function applyRoundSnapshot(round) {
     state.currentRoundId = null;
     state.buzzerOrder = [];
     state.answers = {};
-    $('pres-round-info').classList.add('hidden');
     $('btn-start-round').disabled = false;
     $('btn-next-round').disabled = true;
     renderBuzzerOrder([]);
@@ -96,12 +119,10 @@ function applyRoundSnapshot(round) {
 }
 
 function handleStartRound() {
-  const mediaUrl = $('pres-media-url').value.trim();
-  const correctAnswer = $('pres-correct-answer').value.trim();
   state.socket.emit('rodada:iniciar', {
     room_id: state.room.id,
-    media_url: mediaUrl,
-    correct_answer: correctAnswer,
+    media_url: '',
+    correct_answer: '',
   });
 }
 
@@ -156,10 +177,9 @@ function connectPresenterSocket() {
     state.answers = {};
     state.buzzerOrder = [];
     $('pres-round-num').textContent = data.round_number;
-    $('pres-round-info').classList.remove('hidden');
     $('btn-start-round').disabled = true;
     $('btn-next-round').disabled = false;
-    $('pres-buzzer-order').innerHTML = '<p style="color:#636e72;">Aguardando jogadores...</p>';
+    renderPresenterPlayers(state.players || []); // Forçar re-render para limpar buzinas
     renderAnswers();
     showRoundGo();
   });
@@ -181,12 +201,9 @@ function connectPresenterSocket() {
     state.currentRoundId = null;
     state.answers = {};
     state.buzzerOrder = [];
-    $('pres-round-info').classList.add('hidden');
     $('btn-start-round').disabled = false;
     $('btn-next-round').disabled = true;
-    $('pres-media-url').value = '';
-    $('pres-correct-answer').value = '';
-    $('pres-buzzer-order').innerHTML = '<p style="color:#636e72;">Aguardando...</p>';
+    renderPresenterPlayers(state.players || []); // Limpar visuais de buzina
     renderAnswers();
   });
 
@@ -202,7 +219,10 @@ setupAuth()
       return;
     }
     $('pres-code').textContent = room.code;
-    $('pres-title').textContent = room.title || 'Quiz Show';
+    const roomTitle = room.title || 'Quiz Show';
+    $('pres-title').textContent = roomTitle;
+    $('pres-round-room-title').textContent = roomTitle;
+    document.title = roomTitle + ' — Apresentador';
     connectPresenterSocket();
   })
   .catch(() => { /* redirect já feito por setupAuth/requireRoom */ });
