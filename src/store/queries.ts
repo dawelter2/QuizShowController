@@ -19,6 +19,7 @@ export type Room = {
   status: 'waiting' | 'playing' | 'finished';
   created_at: string;
   ended_at: string | null;
+  last_activity_at: string;
 };
 
 export type RoomPlayer = {
@@ -116,7 +117,7 @@ export function createRoom(presenterId: string, title: string, notes: string): R
   do { code = generateRoomCode(); } while (roomCodeIndex.has(code));
 
   const now = new Date().toISOString();
-  const room: Room = { id, code, presenter_id: presenterId, title, notes, status: 'waiting', created_at: now, ended_at: null };
+  const room: Room = { id, code, presenter_id: presenterId, title, notes, status: 'waiting', created_at: now, ended_at: null, last_activity_at: now };
   roomsMap.set(id, room);
   console.log(`[DEBUG] Sala criada: ${title} (${code})`);
   roomCodeIndex.set(code, id);
@@ -146,12 +147,38 @@ export function updateRoom(id: string, data: { title?: string; notes?: string })
   if (!room) return undefined;
   if (data.title !== undefined) room.title = data.title;
   if (data.notes !== undefined) room.notes = data.notes;
+  touchRoom(id);
   return room;
 }
 
 export function closeRoom(id: string) {
   const room = roomsMap.get(id);
   if (room) { room.status = 'finished'; room.ended_at = new Date().toISOString(); }
+}
+
+export function touchRoom(roomId: string) {
+  const room = roomsMap.get(roomId);
+  if (room) room.last_activity_at = new Date().toISOString();
+}
+
+export function cleanupInactiveRooms(maxAgeHours: number) {
+  const now = Date.now();
+  const maxAgeMs = maxAgeHours * 60 * 60 * 1000;
+  let closedCount = 0;
+
+  for (const room of roomsMap.values()) {
+    if (room.status === 'finished') continue;
+
+    const lastActivity = new Date(room.last_activity_at).getTime();
+    if (now - lastActivity > maxAgeMs) {
+      closeRoom(room.id);
+      closedCount++;
+    }
+  }
+
+  if (closedCount > 0) {
+    console.log(`[CLEANUP] ${closedCount} salas inativas foram encerradas.`);
+  }
 }
 
 // ─── Room Players ────────────────────────────────────
@@ -173,11 +200,15 @@ export function addPlayerToRoom(roomId: string, userId: string, role: 'presenter
       joined_at: new Date().toISOString(), left_at: null, score_cache: 0,
     });
   }
+  touchRoom(roomId);
 }
 
 export function removePlayerFromRoom(roomId: string, userId: string) {
   const player = roomPlayersMap.get(roomId)?.get(userId);
-  if (player) player.left_at = new Date().toISOString();
+  if (player) {
+    player.left_at = new Date().toISOString();
+    touchRoom(roomId);
+  }
 }
 
 export function listRoomPlayers(roomId: string): (RoomPlayer & { name: string })[] {
@@ -190,7 +221,10 @@ export function listRoomPlayers(roomId: string): (RoomPlayer & { name: string })
 
 export function updateScoreCache(roomId: string, userId: string, score: number) {
   const player = roomPlayersMap.get(roomId)?.get(userId);
-  if (player) player.score_cache = score;
+  if (player) {
+    player.score_cache = score;
+    touchRoom(roomId);
+  }
 }
 
 // ─── Rounds ──────────────────────────────────────────
@@ -204,12 +238,17 @@ export function createRound(roomId: string, roundNumber: number, mediaUrl: strin
   ids.push(id);
   roomRoundsMap.set(roomId, ids);
   buzzersMap.set(id, []);
+  touchRoom(roomId);
   return round;
 }
 
 export function closeRound(id: string) {
   const round = roundsMap.get(id);
-  if (round) { round.status = 'done'; round.ended_at = new Date().toISOString(); }
+  if (round) {
+    round.status = 'done';
+    round.ended_at = new Date().toISOString();
+    touchRoom(round.room_id);
+  }
 }
 
 export function findCurrentRound(roomId: string): Round | undefined {
@@ -228,11 +267,15 @@ export function countRounds(roomId: string): number {
 // ─── Buzzer Events ───────────────────────────────────
 
 export function registerBuzz(roundId: string, playerId: string): BuzzerEvent | null {
+  const round = roundsMap.get(roundId);
+  if (!round) return null;
+
   const events = buzzersMap.get(roundId) ?? [];
   if (events.some(e => e.player_id === playerId)) return null;
   const event: BuzzerEvent = { id: uuid(), round_id: roundId, player_id: playerId, position: events.length + 1, timestamp: new Date().toISOString() };
   events.push(event);
   buzzersMap.set(roundId, events);
+  touchRoom(round.room_id);
   return event;
 }
 
@@ -246,17 +289,31 @@ export function getBuzzerOrder(roundId: string): (BuzzerEvent & { player_name: s
 // ─── Answers ─────────────────────────────────────────
 
 export function upsertAnswer(roundId: string, playerId: string, text: string): Answer {
+  const round = roundsMap.get(roundId);
   const key = `${roundId}:${playerId}`;
   const existing = answersMap.get(key);
-  if (existing) { existing.text = text; existing.submitted_at = new Date().toISOString(); return existing; }
+  if (existing) {
+    existing.text = text;
+    existing.submitted_at = new Date().toISOString();
+    if (round) touchRoom(round.room_id);
+    return existing;
+  }
   const answer: Answer = { id: uuid(), round_id: roundId, player_id: playerId, text, submitted_at: new Date().toISOString(), judgment: 'none', score_delta: 0, judged_by: null, judged_at: null };
   answersMap.set(key, answer);
+  if (round) touchRoom(round.room_id);
   return answer;
 }
 
 export function judgeAnswer(roundId: string, playerId: string, judgment: Answer['judgment'], scoreDelta: number, judgeId: string) {
+  const round = roundsMap.get(roundId);
   const answer = answersMap.get(`${roundId}:${playerId}`);
-  if (answer) { answer.judgment = judgment; answer.score_delta = scoreDelta; answer.judged_by = judgeId; answer.judged_at = new Date().toISOString(); }
+  if (answer) {
+    answer.judgment = judgment;
+    answer.score_delta = scoreDelta;
+    answer.judged_by = judgeId;
+    answer.judged_at = new Date().toISOString();
+    if (round) touchRoom(round.room_id);
+  }
 }
 
 export function getRoundAnswers(roundId: string): (Answer & { player_name: string })[] {
@@ -274,4 +331,18 @@ export function getRoomScores(roomId: string): { player_id: string; player_name:
     .filter(p => p.left_at === null && p.role === 'player')
     .sort((a, b) => b.score_cache - a.score_cache)
     .map(p => ({ player_id: p.user_id, player_name: p.name, score: p.score_cache }));
+}
+
+export function resetRoomGame(roomId: string) {
+  // Reset de scores
+  const players = roomPlayersMap.get(roomId);
+  if (players) {
+    for (const player of players.values()) {
+      player.score_cache = 0;
+    }
+  }
+
+  // Reset de rodadas
+  roomRoundsMap.set(roomId, []);
+  touchRoom(roomId);
 }

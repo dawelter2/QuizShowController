@@ -91,6 +91,19 @@ function renderAnswers() {
   container.innerHTML = items || '<p style="color:#636e72;">Nenhuma resposta ainda</p>';
 }
 
+function updateRoundButton(isRoundActive) {
+  const btn = $('btn-round-control');
+  if (!btn) return;
+  
+  if (isRoundActive) {
+    btn.textContent = '⏭ Próxima Rodada';
+    btn.className = 'btn btn-warning';
+  } else {
+    btn.textContent = '▶ Começar Rodada';
+    btn.className = 'btn btn-success';
+  }
+}
+
 function applyRoundSnapshot(round) {
   if (round) {
     state.currentRoundId = round.id;
@@ -100,18 +113,27 @@ function applyRoundSnapshot(round) {
       state.answers[a.player_id] = { player_name: a.player_name, text: a.text };
     });
     $('pres-round-num').textContent = round.round_number;
-    $('btn-start-round').disabled = true;
-    $('btn-next-round').disabled = false;
+    updateRoundButton(true);
     renderBuzzerOrder(state.buzzerOrder);
     renderAnswers();
   } else {
     state.currentRoundId = null;
     state.buzzerOrder = [];
     state.answers = {};
-    $('btn-start-round').disabled = false;
-    $('btn-next-round').disabled = true;
+    $('pres-round-num').textContent = '1';
+    updateRoundButton(false);
     renderBuzzerOrder([]);
     renderAnswers();
+  }
+}
+
+function handleRoundControl() {
+  if (state.currentRoundId) {
+    // Se há uma rodada ativa, finaliza ela. 
+    // O evento 'rodada:proxima' recebido via socket irá disparar o início da próxima automaticamente.
+    handleNextRound();
+  } else {
+    handleStartRound();
   }
 }
 
@@ -147,6 +169,16 @@ function openScore() {
   window.open('/score?sala=' + encodeURIComponent(state.room.code), '_blank');
 }
 
+function handleResetGame() {
+  if (!confirm('Deseja realmente REINICIAR a partida?\n\nIsso irá:\n- Zerar todos os pontos\n- Resetar o contador de rodadas para 1\n\nEssa ação não pode ser desfeita.')) return;
+  
+  state.socket.emit('jogo:resetar', {
+    room_id: state.room.id
+  });
+  
+  toggleMenu('pres-menu'); // Fecha o menu após clicar
+}
+
 function handleCloseRoom() {
   if (!confirm('Encerrar a sala?')) return;
   api('/rooms/' + state.room.id, null);
@@ -162,9 +194,9 @@ function connectPresenterSocket() {
 
   state.socket.on('sala:status', (data) => {
     state.room = { ...state.room, ...data.room };
+    applyRoundSnapshot(data.current_round);
     renderPresenterPlayers(data.players);
     renderPresenterScores(data.scores);
-    applyRoundSnapshot(data.current_round);
   });
 
   state.socket.on('sala:jogadores', (data) => renderPresenterPlayers(data.players));
@@ -174,8 +206,7 @@ function connectPresenterSocket() {
     state.answers = {};
     state.buzzerOrder = [];
     $('pres-round-num').textContent = data.round_number;
-    $('btn-start-round').disabled = true;
-    $('btn-next-round').disabled = false;
+    updateRoundButton(true);
     renderPresenterPlayers(state.players || []); // Forçar re-render para limpar buzinas
     renderAnswers();
     showRoundGo();
@@ -198,10 +229,12 @@ function connectPresenterSocket() {
     state.currentRoundId = null;
     state.answers = {};
     state.buzzerOrder = [];
-    $('btn-start-round').disabled = false;
-    $('btn-next-round').disabled = true;
+    updateRoundButton(false);
     renderPresenterPlayers(state.players || []); // Limpar visuais de buzina
     renderAnswers();
+    
+    // Inicia a próxima rodada automaticamente após o encerramento da anterior
+    setTimeout(() => handleStartRound(), 500);
   });
 
   state.socket.on('erro', (data) => toast(data.message));

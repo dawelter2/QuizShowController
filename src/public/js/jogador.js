@@ -9,6 +9,18 @@ function setBuzzerState(mode) {
   if (wasFirst) buzzer.classList.add('first-buzz');
 }
 
+function updateBuzzerBadge(position) {
+  const badge = $('buzzer-pos');
+  if (!badge) return;
+  if (position) {
+    badge.textContent = position + 'º';
+    badge.classList.add('show');
+  } else {
+    badge.textContent = '';
+    badge.classList.remove('show');
+  }
+}
+
 function renderBuzzerOrder(order) {
   const orderEl = $('player-buzzer-order');
   if (!order || order.length === 0) { orderEl.innerHTML = ''; return; }
@@ -27,6 +39,7 @@ function applyRoundSnapshot(round) {
     const order = round.buzzer_order || [];
     const myBuzz = order.find(o => o.player_id === state.user.id);
     setBuzzerState(myBuzz ? 'pressed' : 'active');
+    updateBuzzerBadge(myBuzz?.position);
     buzzer.classList.toggle('first-buzz', order[0]?.player_id === state.user.id);
     answer.disabled = false;
     const myAnswer = (round.answers || []).find(a => a.player_id === state.user.id);
@@ -34,7 +47,9 @@ function applyRoundSnapshot(round) {
     renderBuzzerOrder(order);
   } else {
     state.currentRoundId = null;
+    $('player-status-round-num').textContent = '1';
     setBuzzerState('disabled');
+    updateBuzzerBadge(null);
     buzzer.classList.remove('first-buzz');
     answer.disabled = true;
     answer.value = '';
@@ -113,6 +128,7 @@ function connectPlayerSocket() {
     state.currentRoundId = data.round_id;
     $('player-status-round-num').textContent = data.round_number;
     setBuzzerState('active');
+    updateBuzzerBadge(null);
     $('player-answer').disabled = false;
     $('player-answer').value = '';
     renderBuzzerOrder([]);
@@ -127,13 +143,21 @@ function connectPlayerSocket() {
   });
 
   state.socket.on('buzina:ordem', (data) => {
-    const myPos = data.order.find(o => o.player_id === state.user.id);
-    if (myPos) setBuzzerState('pressed');
-    const wasAlreadyFirst = $('player-buzzer').classList.contains('first-buzz');
-    $('player-buzzer').classList.toggle('first-buzz', data.order[0]?.player_id === state.user.id);
-    if (!wasAlreadyFirst && data.order[0]?.player_id === state.user.id) {
-      toast('🏆 PRIMEIRO!');
+    const myInfo = data.order.find(o => o.player_id === state.user.id);
+    const wasAlreadyPressed = $('player-buzzer').classList.contains('buzzer-pressed');
+    
+    if (myInfo) {
+      setBuzzerState('pressed');
+      updateBuzzerBadge(myInfo.position);
+      
+      // Se acabou de apertar (não estava 'pressed' antes), mostra o toast
+      if (!wasAlreadyPressed) {
+        const prefix = myInfo.position === 1 ? '🏆 ' : '';
+        toast(`${prefix}VOCÊ É O ${myInfo.position}º!`);
+      }
     }
+    
+    $('player-buzzer').classList.toggle('first-buzz', data.order[0]?.player_id === state.user.id);
     renderBuzzerOrder(data.order);
   });
 
@@ -146,6 +170,7 @@ function connectPlayerSocket() {
   state.socket.on('rodada:proxima', () => {
     state.currentRoundId = null;
     setBuzzerState('disabled');
+    updateBuzzerBadge(null);
     $('player-buzzer').classList.remove('first-buzz');
     $('player-answer').disabled = true;
     $('player-answer').value = '';

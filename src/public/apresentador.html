@@ -95,6 +95,8 @@
     <div class="dropdown-menu" id="pres-menu">
       <button onclick="openScore()">📺 Abrir Transmissão</button>
       <div class="divider"></div>
+      <button onclick="handleResetGame()" style="color:#ff7675;">🔄 Reiniciar Partida</button>
+      <div class="divider"></div>
       <button onclick="handleCloseRoom()">🚪 Encerrar Sala</button>
       <button onclick="handleLeaveRoom()">🔙 Sair da Sala</button>
       <div class="divider"></div>
@@ -105,8 +107,7 @@
 
 <div class="content">
   <div class="flex-row mb-1">
-    <button class="btn btn-success" id="btn-start-round" onclick="handleStartRound()">▶ Começar Rodada</button>
-    <button class="btn btn-warning" id="btn-next-round" onclick="handleNextRound()" disabled>⏭ Próxima Rodada</button>
+    <button class="btn btn-success" id="btn-round-control" onclick="handleRoundControl()">▶ Começar Rodada</button>
   </div>
   <div class="status-bar" id="pres-round-info">
     <span class="badge badge-outline" id="pres-round-room-title"></span>

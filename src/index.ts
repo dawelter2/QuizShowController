@@ -6,6 +6,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { router as apiRoutes } from './api/routes.js';
 import { setupSocketEvents } from './ws/events.js';
+import { cleanupInactiveRooms } from './store/queries.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 7000;
@@ -39,6 +40,11 @@ app.get('*', (_req, res) => {
 
 // WebSocket
 setupSocketEvents(io);
+
+// Rotina de limpeza de salas inativas (roda a cada 1 hora, fecha salas paradas há 1 hora ou mais)
+setInterval(() => {
+  cleanupInactiveRooms(1);
+}, 60 * 60 * 1000);
 
 httpServer.listen(PORT, () => {
   console.log(`🎬 Quiz Show Controller rodando em http://localhost:${PORT}`);

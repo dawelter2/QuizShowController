@@ -4,7 +4,7 @@ import {
   createRound, closeRound, findCurrentRound, countRounds,
   registerBuzz, getBuzzerOrder,
   upsertAnswer, judgeAnswer, getRoundAnswers,
-  updateScoreCache, getRoomScores,
+  updateScoreCache, getRoomScores, resetRoomGame,
   addPlayerToRoom, removePlayerFromRoom,
 } from '../store/queries.js';
 
@@ -157,6 +157,14 @@ export function setupSocketEvents(io: Server) {
         previous_round_id: data.round_id,
         message: 'Próxima rodada!',
       });
+    });
+
+    // ─── Jogo: resetar ─────────────────────────────
+
+    socket.on('jogo:resetar', (data: { room_id: string }) => {
+      resetRoomGame(data.room_id);
+      console.log(`[WS] Sala ${data.room_id} resetada pelo apresentador`);
+      emitRoomStatus(io, data.room_id);
     });
 
     // ─── Disconnect ────────────────────────────────
