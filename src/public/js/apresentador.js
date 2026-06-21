@@ -3,7 +3,6 @@ state.currentRoundId = null;
 state.answers = {};
 state.buzzerOrder = [];
 state.autoNextRound = false;
-state.roundControlsCollapsed = false;
 state.showVideo = false;
 state.videoUrl = '';
 state.videoId = '';
@@ -176,11 +175,6 @@ function toggleAutoNextRound(checked) {
   state.autoNextRound = checked;
 }
 
-function toggleRoundControls() {
-  state.roundControlsCollapsed = !state.roundControlsCollapsed;
-  $('round-controls-collapsible').classList.toggle('collapsed', state.roundControlsCollapsed);
-  $('btn-collapse-round').textContent = state.roundControlsCollapsed ? '▼' : '▶';
-}
 
 // ─── Vídeo YouTube ─────────────────────────────
 function toggleVideoPanel() {
@@ -189,6 +183,7 @@ function toggleVideoPanel() {
   const toggle = $('btn-video-toggle');
   panel.classList.toggle('hidden', !state.showVideo);
   toggle.classList.toggle('active', state.showVideo);
+  document.querySelector('.content').classList.toggle('layout-video', state.showVideo);
   if (state.showVideo) {
     if (state.videoId) {
       $('video-container').classList.remove('hidden');
@@ -213,6 +208,7 @@ function loadVideo() {
   $('btn-video-toggle').classList.add('active');
   $('video-panel').classList.remove('hidden');
   $('video-input-row').classList.add('hidden');
+  document.querySelector('.content').classList.add('layout-video');
   showVideoEmbed(videoId);
 }
 
@@ -243,6 +239,7 @@ function closeVideo() {
   $('video-url').value = '';
   $('video-panel').classList.add('hidden');
   $('btn-video-toggle').classList.remove('active');
+  document.querySelector('.content').classList.remove('layout-video');
 }
 
 function extractYouTubeId(url) {
