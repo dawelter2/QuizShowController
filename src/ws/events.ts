@@ -93,6 +93,7 @@ export function setupSocketEvents(io: Server) {
           player_id: e.player_id,
           player_name: e.player_name,
           position: e.position,
+          timestamp: e.timestamp,
         })),
       });
     });

@@ -75,11 +75,50 @@
   .badge { display: inline-flex; align-items: center; padding: .4rem .75rem; border-radius: 6px; font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
   .badge-outline { background: #16162a; border: 1px solid #2a2a3e; color: #a0a0b8; }
   .badge-primary { background: #6c5ce7; color: #fff; box-shadow: 0 2px 8px rgba(108,92,231,.3); }
+
+  /* ─── Placar Overlay ─── */
+  .btn-placar { position: fixed; top: 62px; right: 0.75rem; z-index: 2500; padding: 0.4rem 1rem; border-radius: 20px; border: 1px solid #2a2a3e; background: #1a1a2e; color: #a0a0b8; font-size: 0.8rem; font-weight: 700; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; touch-action: manipulation; transition: all .15s; }
+  .btn-placar:active { background: #2a2a3e; color: #fdcb6e; border-color: #fdcb6e; }
+
+  .placar-overlay { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,0.88); display: flex; align-items: center; justify-content: center; padding: 1rem; -webkit-tap-highlight-color: transparent; }
+  .placar-overlay.hidden { display: none; }
+  .placar-card { background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 16px; width: 100%; max-width: 380px; max-height: 85vh; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+  .placar-card-header { text-align: center; padding: 1rem 1.25rem 0.75rem; font-size: 1.1rem; font-weight: 800; color: #fdcb6e; letter-spacing: 0.02em; border-bottom: 1px solid #2a2a3e; }
+  .placar-card-body { overflow-y: auto; max-height: calc(85vh - 56px); padding: 0.25rem 0; }
+  .placar-row { display: grid; grid-template-columns: 36px 1fr 64px; align-items: center; gap: 0.6rem; padding: 0.6rem 1rem; border-bottom: 1px solid rgba(42,42,62,0.5); }
+  .placar-row:last-child { border-bottom: none; }
+  .placar-pos { text-align: center; font-size: 1rem; font-weight: 700; }
+  .placar-row[data-pos="1"]:not(.empty) .placar-pos { font-size: 1.3rem; }
+  .placar-row[data-pos="2"]:not(.empty) .placar-pos { font-size: 1.3rem; }
+  .placar-row[data-pos="3"]:not(.empty) .placar-pos { font-size: 1.3rem; }
+  .placar-name { font-weight: 600; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .placar-score { text-align: right; font-weight: 800; font-size: 1.15rem; color: #fdcb6e; font-variant-numeric: tabular-nums; }
+  .placar-row.is-me { background: rgba(108,92,231,0.12); border-bottom-color: transparent; }
+  .placar-row.is-me .placar-name { color: #a29bfe; }
+  .placar-row.is-me + .placar-bar-row { background: rgba(108,92,231,0.12); }
+  .placar-bar-row { padding: 0 1rem 0.5rem; border-bottom: 1px solid rgba(42,42,62,0.5); }
+  .placar-bar-row:last-child { border-bottom: none; }
+  .placar-bar { height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
+  .placar-bar-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, #6c5ce7, #a29bfe); transition: width 0s; }
+  .placar-row.is-me .placar-score { color: #a29bfe; }
+  .placar-row.empty { opacity: 0.35; }
+  .placar-row.empty .placar-score { color: rgba(255,255,255,0.2); }
+  .placar-empty-msg { text-align: center; padding: 2rem; color: #636e72; font-size: 0.9rem; }
 </style>
 </head>
 <body>
 
 <div class="round-go" id="round-go"><div class="go-text">GO!</div></div>
+
+<!-- Placar Overlay: mostra ranking ao pressionar "Ver Placar" -->
+<div class="placar-overlay hidden" id="placar-overlay">
+  <div class="placar-card">
+    <div class="placar-card-header">🏆 Ranking</div>
+    <div class="placar-card-body" id="placar-list"></div>
+  </div>
+</div>
+
+<button id="btn-ver-placar" class="btn-placar">👁️ Ver Placar</button>
 
 <div class="nav-bar">
   <span><strong>🎬 <span id="player-room-title"></span></strong></span>

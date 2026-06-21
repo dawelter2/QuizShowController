@@ -1,5 +1,6 @@
 state.currentRoundId = null;
 let answerTimeout = null;
+let allScores = [];
 
 function setBuzzerState(mode) {
   const buzzer = $('player-buzzer');
@@ -120,7 +121,8 @@ function connectPlayerSocket() {
     $('player-status-room-title').textContent = state.room.title || 'Quiz';
     const me = data.scores?.find(s => s.player_id === state.user.id);
     if (me) $('player-score').textContent = me.score;
-    updatePlayerRank(data.scores);
+    allScores = data.scores || [];
+    updatePlayerRank(allScores);
     applyRoundSnapshot(data.current_round);
   });
 
@@ -164,6 +166,7 @@ function connectPlayerSocket() {
   state.socket.on('placar:atualizado', (data) => {
     const me = data.scores.find(s => s.player_id === state.user.id);
     if (me) $('player-score').textContent = me.score;
+    allScores = data.scores;
     updatePlayerRank(data.scores);
   });
 
@@ -193,6 +196,46 @@ $('player-answer').addEventListener('input', function() {
   }, 300);
 });
 
+// ─── Placar Overlay ──────────────────────────────
+function renderPlacarOverlay() {
+  const list = $('placar-list');
+  if (!list) return;
+  if (!allScores.length) {
+    list.innerHTML = '<div class="placar-empty-msg">Nenhum jogador na sala</div>';
+    return;
+  }
+  const sorted = [...allScores].sort((a, b) => b.score - a.score);
+  const maxScore = Math.max(sorted[0]?.score || 1, 1);
+  let html = '';
+  let i = 0;
+  for (const s of sorted) {
+    if (i >= 10) break; i++;
+    const pos = sorted.filter(x => x.score > s.score).length + 1;
+    const posText = ['🥇', '🥈', '🥉'][pos - 1] || pos + 'º';
+    const pct = Math.max((s.score / maxScore) * 100, 3);
+    const isMe = s.player_id === state.user.id;
+    const escName = escapeHtml(s.player_name || 'Jogador');
+    html += '<div class="placar-row' + (isMe ? ' is-me' : '') + '" data-pos="' + pos + '">'
+      + '<div class="placar-pos">' + posText + '</div>'
+      + '<div class="placar-name">' + escName + '</div>'
+      + '<div class="placar-score">' + s.score + '</div>'
+      + '</div>'
+      + '<div class="placar-bar-row' + (isMe ? ' is-me' : '') + '">'
+      + '<div class="placar-bar"><div class="placar-bar-fill" style="width:' + pct + '%"></div></div>'
+      + '</div>';
+  }
+  list.innerHTML = html;
+}
+
+function showPlacar() {
+  renderPlacarOverlay();
+  $('placar-overlay').classList.remove('hidden');
+}
+
+function hidePlacar() {
+  $('placar-overlay').classList.add('hidden');
+}
+
 // ─── Init ─────────────────────────────────────────
 setupAuth()
   .then(() => requireRoom(getRoomCodeFromUrl()))
@@ -206,7 +249,38 @@ setupAuth()
     $('player-room-title').textContent = roomTitle;
     $('player-status-room-title').textContent = roomTitle;
     document.title = roomTitle + ' — Jogador';
-    return api('/rooms/' + room.id + '/players', { user_id: state.user.id })
+      return api('/rooms/' + room.id + '/players', { user_id: state.user.id })
       .then(() => connectPlayerSocket());
   })
   .catch(() => { /* redirect já feito */ });
+
+// ─── Eventos do Placar Overlay (touch + mouse) ──
+let _touchPlacar = false;
+
+const placarBtn = $('btn-ver-placar');
+if (placarBtn) {
+  placarBtn.addEventListener('touchstart', function (e) {
+    _touchPlacar = true;
+    showPlacar();
+  }, { passive: true });
+
+  placarBtn.addEventListener('mousedown', function (e) {
+    if (_touchPlacar) return;
+    showPlacar();
+  });
+}
+
+document.addEventListener('touchend', function () {
+  _touchPlacar = false;
+  hidePlacar();
+}, { passive: true });
+
+document.addEventListener('touchcancel', function () {
+  _touchPlacar = false;
+  hidePlacar();
+}, { passive: true });
+
+document.addEventListener('mouseup', function () {
+  if (_touchPlacar) return;
+  hidePlacar();
+});

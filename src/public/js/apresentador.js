@@ -2,6 +2,11 @@
 state.currentRoundId = null;
 state.answers = {};
 state.buzzerOrder = [];
+state.autoNextRound = false;
+state.roundControlsCollapsed = false;
+state.showVideo = false;
+state.videoUrl = '';
+state.videoId = '';
 
 function renderPresenterPlayers(players) {
   state.players = players; // Salva para re-render
@@ -13,10 +18,22 @@ function renderPresenterPlayers(players) {
 
   const order = state.buzzerOrder || [];
   
+  // Encontrar timestamp do primeiro jogador que buzinou (referência para delta)
+  let firstTs = null;
+  for (const o of order) {
+    if (o.timestamp) { firstTs = new Date(o.timestamp).getTime(); break; }
+  }
+  
   // Criar lista enriquecida com info de buzina
   const enrichedPlayers = players.filter(p => p.role === 'player').map(p => {
     const buzzInfo = order.find(o => o.player_id === p.user_id);
-    return { ...p, buzzPos: buzzInfo?.position };
+    let deltaStr = '';
+    if (buzzInfo?.timestamp && firstTs && buzzInfo.position > 1) {
+      const t = new Date(buzzInfo.timestamp).getTime();
+      const diff = (t - firstTs) / 1000;
+      deltaStr = `+${diff.toFixed(3)}s`;
+    }
+    return { ...p, buzzPos: buzzInfo?.position, deltaStr };
   });
 
   // Reordenar: quem buzinou primeiro no topo, depois por nome
@@ -32,12 +49,14 @@ function renderPresenterPlayers(players) {
     const isFirst = p.buzzPos === 1;
     const cls = `player-card ${isBuzzed ? 'is-buzzed' : ''} ${isFirst ? 'is-first-buzz' : ''}`;
     const buzzHtml = isBuzzed ? `<span class="buzz-pos">${p.buzzPos}º</span>` : '';
+    const deltaHtml = p.deltaStr ? `<span class="buzz-delta">${p.deltaStr}</span>` : '';
     
     return `
       <div class="${cls}" id="pp-${p.user_id}">
         <div style="display:flex;align-items:center;">
           ${buzzHtml}
           <span class="name">${escapeHtml(p.name)}</span>
+          ${deltaHtml}
         </div>
         <div style="display:flex;align-items:center;gap:.75rem;">
           <span class="score" id="ps-${p.user_id}">${p.score_cache}</span>
@@ -153,6 +172,86 @@ function handleNextRound() {
   });
 }
 
+function toggleAutoNextRound(checked) {
+  state.autoNextRound = checked;
+}
+
+function toggleRoundControls() {
+  state.roundControlsCollapsed = !state.roundControlsCollapsed;
+  $('round-controls-collapsible').classList.toggle('collapsed', state.roundControlsCollapsed);
+  $('btn-collapse-round').textContent = state.roundControlsCollapsed ? '▼' : '▶';
+}
+
+// ─── Vídeo YouTube ─────────────────────────────
+function toggleVideoPanel() {
+  state.showVideo = !state.showVideo;
+  const panel = $('video-panel');
+  const toggle = $('btn-video-toggle');
+  panel.classList.toggle('hidden', !state.showVideo);
+  toggle.classList.toggle('active', state.showVideo);
+  if (state.showVideo) {
+    if (state.videoId) {
+      $('video-container').classList.remove('hidden');
+      $('video-empty').classList.add('hidden');
+    } else {
+      $('video-url').focus();
+    }
+  }
+}
+
+function loadVideo() {
+  const input = $('video-url');
+  const url = input.value.trim();
+  const videoId = extractYouTubeId(url);
+  if (!videoId) {
+    toast('URL do YouTube inválida');
+    return;
+  }
+  state.videoUrl = url;
+  state.videoId = videoId;
+  state.showVideo = true;
+  $('btn-video-toggle').classList.add('active');
+  $('video-panel').classList.remove('hidden');
+  $('video-input-row').classList.add('hidden');
+  showVideoEmbed(videoId);
+}
+
+function showVideoEmbed(videoId) {
+  const container = $('video-container');
+  container.classList.remove('hidden');
+  $('video-empty').classList.add('hidden');
+  const existing = container.querySelector('iframe');
+  if (existing) existing.remove();
+  const iframe = document.createElement('iframe');
+  iframe.src = 'https://www.youtube.com/embed/' + videoId + '?autoplay=1&rel=0&controls=0&modestbranding=1';
+  iframe.setAttribute('allow', 'autoplay; encrypted-media');
+  iframe.setAttribute('allowfullscreen', '');
+  iframe.style.width = '100%';
+  iframe.style.height = '100%';
+  iframe.style.border = 'none';
+  container.appendChild(iframe);
+}
+
+function closeVideo() {
+  state.showVideo = false;
+  state.videoUrl = '';
+  state.videoId = '';
+  $('video-input-row').classList.remove('hidden');
+  $('video-container').classList.add('hidden');
+  $('video-container').innerHTML = '<div class="video-empty" id="video-empty">Cole a URL do YouTube e clique em Carregar</div>';
+  $('video-empty').classList.remove('hidden');
+  $('video-url').value = '';
+  $('video-panel').classList.add('hidden');
+  $('btn-video-toggle').classList.remove('active');
+}
+
+function extractYouTubeId(url) {
+  var m = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/|youtube-nocookie\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+  if (m) return m[1];
+  m = url.match(/^([a-zA-Z0-9_-]{11})$/);
+  return m ? m[1] : null;
+}
+
 function changeScore(playerId, delta) {
   if (!state.currentRoundId) return toast('Inicie uma rodada primeiro');
   state.socket.emit('pontos:alterar', {
@@ -162,6 +261,9 @@ function changeScore(playerId, delta) {
     score_delta: delta,
     judgment: delta > 0 ? (delta >= 3 ? 'na_mosca' : 'raspando') : 'errado',
   });
+  if (state.autoNextRound) {
+    handleNextRound();
+  }
 }
 
 function openScore() {

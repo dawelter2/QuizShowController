@@ -30,7 +30,9 @@
   #widget-ranking .list { position: relative; }
 
   /* ─── Rank-row: colunas fixas via grid ─── */
-  #widget-ranking .rank-row { display: grid; grid-template-columns: 18px 34px 1fr 70px 56px; align-items: center; gap: .7rem; transition: transform .35s cubic-bezier(.2,.7,.2,1); }
+  #widget-ranking .rank-row { display: grid; grid-template-columns: 18px 34px 1fr auto 70px 56px; align-items: center; gap: .7rem; transition: transform .35s cubic-bezier(.2,.7,.2,1); }
+  #widget-ranking .rank-delta-time-cell { display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
+  #widget-ranking .rank-delta-time { font-family: 'JetBrains Mono','Fira Code',monospace; font-size: .65rem; font-weight: 700; color: #a29bfe; opacity: .85; white-space: nowrap; }
   #widget-ranking .rank-trend { width: 18px; text-align: center; font-size: .9rem; font-weight: 800; color: transparent; }
   #widget-ranking .rank-trend.up { color: #00b894; }
   #widget-ranking .rank-trend.down { color: #d63031; }
@@ -239,6 +241,7 @@
   var currentRoundNumber = null;
   var currentRoundActive = false;
   var buzzedOrderByPid = {};      // pid → posição (1,2,3,...)
+  var buzzerTimestampsByPid = {}; // pid → timestamp ISO
   var lastDeltaByPid = {};        // pid → último delta de score (persiste até rodada:iniciada)
   var prevRankByPid = {};         // pid → rank antes da última mudança (1-based)
   var rankTrendByPid = {};        // pid → 'up' | 'down' (persiste até próxima mudança de rank)
@@ -315,6 +318,15 @@
 
     computeRankTrends(sorted);
 
+    // Encontrar timestamp do primeiro jogador que buzinou (referência para delta)
+    var firstTs = null;
+    var pidsWithTs = Object.keys(buzzerTimestampsByPid).sort(function(a,b){
+      return new Date(buzzerTimestampsByPid[a]).getTime() - new Date(buzzerTimestampsByPid[b]).getTime();
+    });
+    if (pidsWithTs.length > 0) {
+      firstTs = new Date(buzzerTimestampsByPid[pidsWithTs[0]]).getTime();
+    }
+
     var oldPositions = {};
     Object.keys(prevPositions).forEach(function(pid){ oldPositions[pid] = prevPositions[pid]; });
 
@@ -342,11 +354,22 @@
         deltaHtml = '<span class="rank-delta '+dcls+'">'+sign+delta+'</span>';
       }
 
+      // Delta de tempo (buzzer)
+      var timeDeltaHtml = '';
+      var bzPos = buzzedOrderByPid[s.player_id];
+      if (bzPos && firstTs && buzzerTimestampsByPid[s.player_id]) {
+        var t = new Date(buzzerTimestampsByPid[s.player_id]).getTime();
+        var diff = (t - firstTs) / 1000;
+        if (diff > 0) {
+          timeDeltaHtml = '<span class="rank-delta-time">+'+diff.toFixed(3)+'s</span>';
+        }
+      }
+
       var bzClass = 'neutral';
       var bzContent = '';
-      if (buzzedOrderByPid[s.player_id]) {
+      if (bzPos) {
         bzClass = 'buzzed';
-        bzContent = buzzedOrderByPid[s.player_id] + 'º';
+        bzContent = bzPos + 'º';
       } else if (currentRoundActive) {
         bzClass = 'armed';
       }
@@ -356,6 +379,7 @@
         + trendHtml
         + '<div class="rank-pos">' + posText + '</div>'
         + '<div class="rank-main"><div class="rank-name">' + esc(s.player_name) + '</div><div class="rank-bar"><div class="rank-bar-fill" style="width:'+pct+'%"></div></div></div>'
+        + '<div class="rank-delta-time-cell">' + timeDeltaHtml + '</div>'
         + '<div class="rank-score"><span class="rank-score-value" data-pid="'+esc(s.player_id)+'" data-from="'+initialScore+'" data-to="'+s.score+'">' + initialScore + '</span>' + deltaHtml + '</div>'
         + buzzerHtml
         + '</div>';
@@ -369,6 +393,7 @@
         + '<div class="rank-trend"></div>'
         + '<div class="rank-pos">' + posTextJ + '</div>'
         + '<div class="rank-main"><div class="rank-name">—</div><div class="rank-bar"><div class="rank-bar-fill" style="width:0%"></div></div></div>'
+        + '<div class="rank-delta-time-cell"></div>'
         + '<div class="rank-score">—</div>'
         + '<div class="rank-buzzer neutral"><span class="bz"></span></div>'
         + '</div>';
@@ -436,6 +461,7 @@
         currentRoundNumber = d.round_number;
         currentRoundActive = true;
         buzzedOrderByPid = {};
+        buzzerTimestampsByPid = {};
         lastDeltaByPid = {};
         updateRoundLabel();
         renderModule();
@@ -445,6 +471,7 @@
       socket.on('rodada:proxima', function(){
         currentRoundActive = false;
         buzzedOrderByPid = {};
+        buzzerTimestampsByPid = {};
         updateRoundLabel();
         renderModule();
       });
@@ -452,7 +479,11 @@
       socket.on('buzina:ordem', function(d){
         var order = d.order || [];
         buzzedOrderByPid = {};
-        order.forEach(function(o){ buzzedOrderByPid[o.player_id] = o.position; });
+        buzzerTimestampsByPid = {};
+        order.forEach(function(o){
+          buzzedOrderByPid[o.player_id] = o.position;
+          if (o.timestamp) buzzerTimestampsByPid[o.player_id] = o.timestamp;
+        });
         renderModule();
       });
 
@@ -475,11 +506,16 @@
           currentRoundNumber = d.current_round.round_number;
           currentRoundActive = (d.current_round.status === 'active');
           buzzedOrderByPid = {};
-          (d.current_round.buzzer_order || []).forEach(function(o){ buzzedOrderByPid[o.player_id] = o.position; });
+          buzzerTimestampsByPid = {};
+          (d.current_round.buzzer_order || []).forEach(function(o){
+            buzzedOrderByPid[o.player_id] = o.position;
+            if (o.timestamp) buzzerTimestampsByPid[o.player_id] = o.timestamp;
+          });
         } else {
           currentRoundNumber = null;
           currentRoundActive = false;
           buzzedOrderByPid = {};
+          buzzerTimestampsByPid = {};
           lastDeltaByPid = {}; // Limpa deltas no reset
         }
         updateRoundLabel();
