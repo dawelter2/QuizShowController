@@ -51,6 +51,15 @@
   .player-card.is-first-buzz .buzz-pos { background: #fdcb6e; color: #1a1a2e; }
   .player-card .buzz-delta { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85rem; font-weight: 700; color: #a29bfe; margin-left: 0.75rem; opacity: 0.9; }
 
+  /* Presença e remoção */
+  .player-card.is-offline { opacity: .62; }
+  .presence-dot { width: 9px; height: 9px; border-radius: 50%; background: #636e72; flex-shrink: 0; margin-right: .5rem; display: inline-block; }
+  .presence-dot.online { background: #00b894; box-shadow: 0 0 6px rgba(0,184,148,.8); }
+  .player-card .player-code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: .68rem; font-weight: 700; color: #636e72; margin-left: .5rem; letter-spacing: .02em; }
+  .player-card .badge-dup { margin-left: .4rem; font-size: .85rem; cursor: help; }
+  .btn-kick { width: 30px; height: 30px; border-radius: 6px; border: 1px solid #3a3a52; background: #232342; color: #ff7675; font-weight: 800; cursor: pointer; flex-shrink: 0; transition: all .15s; }
+  .btn-kick:hover { background: #d63031; color: #fff; border-color: #d63031; }
+
   /* ─── Compacto: modo vídeo ativo ─── */
   .content.layout-video .video-toggle { padding: .35rem .6rem; font-size: .8rem; }
   .content.layout-video h2 { font-size: 1rem; margin-bottom: .5rem; }
@@ -61,6 +70,9 @@
   .content.layout-video .player-card .score-actions button { width: 26px; height: 26px; font-size: .65rem; }
   .content.layout-video .player-card .buzz-pos { font-size: .7rem; padding: .1rem .35rem; margin-right: .35rem; }
   .content.layout-video .player-card .buzz-delta { font-size: .7rem; margin-left: .35rem; }
+  .content.layout-video .player-card .player-code,
+  .content.layout-video .player-card .badge-dup { display: none; }
+  .content.layout-video .player-card .btn-kick { width: 24px; height: 24px; font-size: .7rem; }
   .content.layout-video .round-controls-wrap { margin-bottom: .35rem; }
   .content.layout-video .flex-row { gap: .35rem; }
   .content.layout-video .flex-row .btn { padding: .4rem .75rem; font-size: .85rem; min-width: 0; }
@@ -175,7 +187,7 @@
       <button onclick="handleCloseRoom()">🚪 Encerrar Sala</button>
       <button onclick="handleLeaveRoom()">🔙 Sair da Sala</button>
       <div class="divider"></div>
-      <button onclick="handleChangeName()">✏️ Mudar Nome</button>
+      <button onclick="handleRename()">✏️ Mudar Nome</button>
     </div>
   </div>
 </div>

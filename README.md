@@ -47,6 +47,13 @@ npm install
 npm run dev
 ```
 
+## Testes
+
+```bash
+# Compila o TypeScript e roda os testes de identidade/presença dos jogadores
+npm test
+```
+
 ## Licença
 
 MIT

@@ -2,7 +2,8 @@ import { Router, Request, Response } from 'express';
 import {
   createUser, findUserBySession, updateLastSeen,
   createRoom, findRoomByCode, findRoomById, listActiveRooms, updateRoom, closeRoom,
-  addPlayerToRoom, removePlayerFromRoom, listRoomPlayers,
+  listRoomPlayers, joinRoomAsPlayer, kickPlayerFromRoom,
+  renameUser, sanitizePlayerName,
 } from '../store/queries.js';
 
 export const router = Router();
@@ -29,6 +30,33 @@ router.post('/auth', (req: Request, res: Response) => {
   const newSessionId = crypto.randomUUID();
   const user = createUser(name.trim().slice(0, 50), newSessionId);
   res.json({ user });
+});
+
+// Renomear sem perder a sessão/identidade (usado pelo lobby quando o nome
+// escolhido já está em uso na sala).
+router.patch('/auth', (req: Request, res: Response) => {
+  const { session_id, name } = req.body ?? {};
+
+  if (!session_id) {
+    res.status(400).json({ error: 'session_id é obrigatório' });
+    return;
+  }
+
+  const user = findUserBySession(session_id);
+  if (!user) {
+    res.status(404).json({ error: 'Sessão não encontrada' });
+    return;
+  }
+
+  const cleanName = sanitizePlayerName(name);
+  if (!cleanName) {
+    res.status(400).json({ error: 'Nome inválido (use de 1 a 50 caracteres)' });
+    return;
+  }
+
+  const updated = renameUser(user.id, cleanName);
+  updateLastSeen(user.id);
+  res.json({ user: updated });
 });
 
 // ─── Rooms ──────────────────────────────────────────
@@ -101,11 +129,35 @@ router.post('/rooms/:id/players', (req: Request, res: Response) => {
     res.status(400).json({ error: 'user_id é obrigatório' });
     return;
   }
-  addPlayerToRoom(req.params.id as string, user_id, 'player');
-  res.json({ ok: true });
+
+  const result = joinRoomAsPlayer(req.params.id as string, user_id);
+  if (!result.ok) {
+    const status = result.code === 'NAME_TAKEN' ? 409 : result.code === 'KICKED' ? 403 : 404;
+    res.status(status).json({ ok: false, error: result.message, code: result.code });
+    return;
+  }
+
+  res.json({ ok: true, user: result.user, adopted: result.adopted });
 });
 
 router.delete('/rooms/:id/players/:userId', (req: Request, res: Response) => {
-  removePlayerFromRoom(req.params.id as string, req.params.userId as string);
+  const room = findRoomById(req.params.id as string);
+  if (!room) {
+    res.status(404).json({ error: 'Sala não encontrada' });
+    return;
+  }
+
+  const { presenter_id } = req.body ?? {};
+  if (presenter_id !== room.presenter_id) {
+    res.status(403).json({ error: 'Apenas o apresentador pode remover jogadores' });
+    return;
+  }
+
+  const result = kickPlayerFromRoom(room.id, req.params.userId as string);
+  if (!result.ok) {
+    res.status(400).json({ error: result.message });
+    return;
+  }
+
   res.json({ ok: true });
 });

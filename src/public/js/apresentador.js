@@ -46,15 +46,22 @@ function renderPresenterPlayers(players) {
   container.innerHTML = enrichedPlayers.map(p => {
     const isBuzzed = !!p.buzzPos;
     const isFirst = p.buzzPos === 1;
-    const cls = `player-card ${isBuzzed ? 'is-buzzed' : ''} ${isFirst ? 'is-first-buzz' : ''}`;
+    const online = p.online !== false;
+    const cls = `player-card ${isBuzzed ? 'is-buzzed' : ''} ${isFirst ? 'is-first-buzz' : ''} ${online ? '' : 'is-offline'}`;
     const buzzHtml = isBuzzed ? `<span class="buzz-pos">${p.buzzPos}º</span>` : '';
     const deltaHtml = p.deltaStr ? `<span class="buzz-delta">${p.deltaStr}</span>` : '';
-    
+    const presenceHtml = `<span class="presence-dot ${online ? 'online' : 'offline'}" title="${online ? 'Online' : 'Offline'}" aria-label="${online ? 'Online' : 'Offline'}"></span>`;
+    const codeHtml = p.player_code ? `<span class="player-code" title="Código interno do jogador">#${escapeHtml(p.player_code)}</span>` : '';
+    const dupHtml = p.is_duplicate ? `<span class="badge-dup" title="Nome duplicado na sala">⚠️</span>` : '';
+
     return `
       <div class="${cls}" id="pp-${p.user_id}">
-        <div style="display:flex;align-items:center;">
+        <div style="display:flex;align-items:center;min-width:0;">
+          ${presenceHtml}
           ${buzzHtml}
           <span class="name">${escapeHtml(p.name)}</span>
+          ${codeHtml}
+          ${dupHtml}
           ${deltaHtml}
         </div>
         <div style="display:flex;align-items:center;gap:.75rem;">
@@ -64,6 +71,7 @@ function renderPresenterPlayers(players) {
             <button class="btn-plus" onclick="changeScore('${p.user_id}', 1)">+1</button>
             <button class="btn-minus" onclick="changeScore('${p.user_id}', -2)">-2</button>
           </div>
+          <button class="btn-kick" onclick="handleRemovePlayer('${p.user_id}')" title="Remover jogador" aria-label="Remover jogador">✕</button>
         </div>
       </div>
     `;
@@ -263,6 +271,22 @@ function changeScore(playerId, delta) {
   }
 }
 
+function handleRemovePlayer(userId) {
+  const player = state.players?.find(p => p.user_id === userId);
+  if (!player) return;
+
+  const status = player.online === false ? ' (offline)' : ' (online)';
+  if (!confirm(`Remover ${player.name}${status} da sala?\n\nA pontuação sai do placar e a sessão é removida. Para desfazer, reinicie a partida ou encerre a sala.`)) return;
+
+  state.socket.emit('jogador:remover', { room_id: state.room.id, user_id: userId }, (res) => {
+    if (!res || !res.ok) {
+      toast((res && res.error) || 'Não foi possível remover o jogador');
+      return;
+    }
+    toast(`${player.name} removido da sala`);
+  });
+}
+
 function openScore() {
   if (!state.room?.code) return;
   window.open('/score?sala=' + encodeURIComponent(state.room.code), '_blank');
@@ -280,10 +304,11 @@ function handleResetGame() {
 
 function handleCloseRoom() {
   if (!confirm('Encerrar a sala?')) return;
-  api('/rooms/' + state.room.id, null);
-  localStorage.removeItem('last_room_code');
-  if (state.socket) state.socket.disconnect();
-  location.href = '/';
+  api('/rooms/' + state.room.id, null, 'DELETE').finally(() => {
+    localStorage.removeItem('last_room_code');
+    if (state.socket) state.socket.disconnect();
+    location.href = '/';
+  });
 }
 
 function connectPresenterSocket() {

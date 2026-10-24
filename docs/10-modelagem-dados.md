@@ -116,8 +116,14 @@ users ──< room_players >── rooms
 | user_id      | UUID (FK)   | Jogador/presenter                     |
 | role         | ENUM        | `presenter | player`                  |
 | joined_at    | TIMESTAMP   |                                        |
-| left_at      | TIMESTAMP   | Null se ainda está na sala            |
+| left_at      | TIMESTAMP   | Null se ainda está na sala (saída voluntária ou remoção) |
+| kicked_at    | TIMESTAMP   | Null se não foi removido pelo apresentador |
+| claimed_at   | TIMESTAMP   | Última entrada/adoção; reserva o nome por 10 s antes do socket conectar |
+| last_online_at | TIMESTAMP | Última vez que teve socket ativo (null = nunca conectou) |
 | score_cache  | INT         | Score total (desnormalizado)          |
+
+> `online` não é persistido: é derivado dos sockets conectados (`presenceMap`).
+> O estado é mantido em memória; `data/quiz.db` não é usado por esta versão.
 
 > `(room_id, user_id)` é chave única.
 

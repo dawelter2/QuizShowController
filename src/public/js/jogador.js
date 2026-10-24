@@ -115,6 +115,22 @@ function connectPlayerSocket() {
 
   state.socket.on('connect_error', (err) => toast('Erro de conexão: ' + err.message));
 
+  // Sessão nova adotou o jogador antigo (mesmo nome, entrada offline).
+  state.socket.on('sessao:adotada', (data) => {
+    if (!data?.user) return;
+    state.user = data.user;
+    $('player-name').textContent = state.user.name;
+    toast('Sessão recuperada. Seus pontos foram mantidos.');
+  });
+
+  // Apresentador removeu este jogador da sala.
+  state.socket.on('sala:removido', (data) => {
+    toast((data && data.message) || 'Você foi removido da sala');
+    try { state.socket.disconnect(); } catch (_) { /* ignore */ }
+    localStorage.removeItem('last_room_code');
+    setTimeout(() => location.href = '/', 1500);
+  });
+
   state.socket.on('sala:status', (data) => {
     state.room = { ...state.room, ...data.room };
     $('player-room-title').textContent = state.room.title || 'Quiz';
@@ -180,7 +196,13 @@ function connectPlayerSocket() {
     renderBuzzerOrder([]);
   });
 
-  state.socket.on('erro', (data) => toast(data.message));
+  state.socket.on('erro', (data) => {
+    toast(data.message);
+    if (data && (data.code === 'KICKED' || data.code === 'NAME_TAKEN')) {
+      localStorage.removeItem('last_room_code');
+      setTimeout(() => location.href = '/', 1500);
+    }
+  });
 }
 
 // Input handler para textarea — registra após o DOM estar pronto (script no final do body já garante)
@@ -249,8 +271,21 @@ setupAuth()
     $('player-room-title').textContent = roomTitle;
     $('player-status-room-title').textContent = roomTitle;
     document.title = roomTitle + ' — Jogador';
-      return api('/rooms/' + room.id + '/players', { user_id: state.user.id })
-      .then(() => connectPlayerSocket());
+    return api('/rooms/' + room.id + '/players', { user_id: state.user.id })
+      .then(res => {
+        if (!res || !res.ok) {
+          toast((res && res.error) || 'Não foi possível entrar na sala');
+          localStorage.removeItem('last_room_code');
+          setTimeout(() => location.href = '/', 1500);
+          return;
+        }
+        if (res.user && res.user.id !== state.user.id) {
+          state.user = res.user;
+          $('player-name').textContent = state.user.name;
+          toast('Bem-vindo de volta! Seus pontos foram mantidos.');
+        }
+        connectPlayerSocket();
+      });
   })
   .catch(() => { /* redirect já feito */ });
 

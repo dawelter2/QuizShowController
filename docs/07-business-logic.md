@@ -16,7 +16,11 @@
 ```
 
 - Não há senha — apenas nome
-- Nome não precisa ser único (podem haver "Anas" diferentes, mas cada sessão é única)
+- O nome **não é único globalmente** (duas "Anas" podem existir em salas diferentes)
+- Dentro de uma mesma sala, o nome é único (comparação sem diferenciar maiúsculas/espaços)
+  - Se já existir uma entrada **offline** com o mesmo nome, o jogador é reconectado a ela (pontos preservados)
+  - Se já existir um jogador **online** com o mesmo nome, a entrada é recusada e o jogador escolhe outro nome
+- "Mudar Nome" renomeia **no lugar**, sem criar outro usuário nem perder pontos
 - Após criar ou entrar, o usuário é redirecionado para a tela correspondente
 
 ## 2. Sala
@@ -93,7 +97,12 @@ A tela de transmissão reflete o estado atual:
 |---------------------------------------|----------------------------------------------------|
 | Jogador apertou buzina 2x na rodada  | Segundo clique ignorado                            |
 | Jogador entrou no meio da rodada     | Buzina e resposta bloqueados até a próxima rodada  |
-| Apresentador fecha o navegador       | Sala é encerrada (dados em memória)                |
-| Jogador desconecta e reconecta       | Score preservado se reconectar com o mesmo nome    |
+| Apresentador fecha o navegador       | Sala permanece em memória até a limpeza de inativas |
+| Jogador fecha a aba / perde conexão  | Fica **offline** na lista (não é removido)          |
+| Jogador reconecta com a mesma sessão | Mesma entrada, pontos/respostas preservados        |
+| Jogador volta com sessão nova e nome igual, entrada antiga offline | Identidade antiga é adotada automaticamente; pontos preservados |
+| Jogador tenta um nome já usado por alguém online na sala | Entrada recusada (`NAME_TAKEN`); escolhe outro nome |
+| Apresentador remove jogador          | Sai da lista/placar; respostas da sala apagadas; a mesma sessão fica bloqueada até reiniciar a partida ou encerrar a sala |
+| Apresentador muda de nome            | Renomeia no lugar; a sala continua sob o mesmo `presenter_id` |
 | Ninguém aperta buzina                | Apresentador vê lista vazia, pode ir p/ próxima   |
 | Todos apertaram mas ninguém escreveu | Apresentador vê respostas vazias                   |

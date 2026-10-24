@@ -106,11 +106,41 @@ function joinRoomByCode(code) {
       location.href = '/apresentador?sala=' + res.room.code;
       return;
     }
-    return api('/rooms/' + res.room.id + '/players', { user_id: state.user.id }).then(() => {
-      localStorage.setItem('last_room_code', res.room.code);
-      location.href = '/jogador?sala=' + res.room.code;
-    });
+    return joinRoomEntry(res.room, false);
   }).catch(e => toast('Erro: ' + e.message));
+}
+
+// Entra na sala tratando nome já em uso (oferece trocar o nome e tenta de novo).
+function joinRoomEntry(room, retried) {
+  return api('/rooms/' + room.id + '/players', { user_id: state.user.id }).then(res => {
+    if (res && res.ok) {
+      localStorage.setItem('last_room_code', room.code);
+      location.href = '/jogador?sala=' + room.code;
+      return;
+    }
+
+    if (res && res.code === 'NAME_TAKEN' && !retried) {
+      const typed = prompt(`O nome "${state.user.name}" já está em uso nesta sala.\nDigite outro nome:`);
+      if (typed === null) return;
+      const name = typed.trim().replace(/\s+/g, ' ');
+      if (!name) return toast('Digite um nome');
+
+      return api('/auth', { session_id: state.user.session_id, name }, 'PATCH').then(renamed => {
+        if (!renamed || !renamed.user) {
+          return toast((renamed && renamed.error) || 'Não foi possível trocar o nome');
+        }
+        state.user = renamed.user;
+        if ($('lobby-name')) $('lobby-name').textContent = state.user.name;
+        return joinRoomEntry(room, true);
+      });
+    }
+
+    if (res && res.code === 'NAME_TAKEN') {
+      return toast('Esse nome ainda está em uso. Saia e entre com outro nome.');
+    }
+
+    toast((res && res.error) || 'Não foi possível entrar na sala');
+  });
 }
 
 // ─── Init ─────────────────────────────────────────

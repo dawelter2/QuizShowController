@@ -31,6 +31,20 @@ POST /api/auth
 > Cria um `user` se não existir, ou retorna o existente se o `session_id` for reenviado.
 > O `session_id` deve ser armazenado no frontend (localStorage) para reconexão.
 
+#### `PATCH /api/auth`
+
+Renomeia o usuário sem criar outra identidade (mesmo `user_id`, mesma sessão).
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| session_id | string | Sessão atual do usuário |
+| name | string | Novo nome (1–50 caracteres) |
+
+**Resposta:** `{ "user": { "id": "uuid", "name": "Novo Nome", "session_id": "..." } }`
+
+> Usado pelo lobby quando o nome escolhido já está em uso na sala. A validação
+> de unicidade por sala acontece na entrada (`POST /rooms/:id/players`).
+
 ---
 
 ### Salas
@@ -101,8 +115,26 @@ Encerra a sala. Só o apresentador pode fazer.
 ### Jogadores
 
 ```
-GET    /api/rooms/:id/players   → Listar jogadores na sala
-DELETE /api/rooms/:id/players/:userId → Remover jogador
+GET    /api/rooms/:id/players          → Listar jogadores na sala
+POST   /api/rooms/:id/players          → Entrar na sala (valida nome único)
+DELETE /api/rooms/:id/players/:userId  → Remover jogador (somente apresentador)
+```
+
+#### `POST /api/rooms/:id/players`
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| user_id | string | Usuário que está entrando |
+
+Regras:
+- mesmo `user_id` já na sala → reativa a entrada;
+- nome igual a um jogador **offline** → adota a identidade antiga (`adopted: true`), preservando pontos;
+- nome igual a um jogador **online** ou recém-entrado → `409 { "code": "NAME_TAKEN" }`;
+- usuário removido pelo apresentador → `403 { "code": "KICKED" }`.
+
+**Resposta:**
+```json
+{ "ok": true, "user": { "id": "uuid", "name": "Ana" }, "adopted": false }
 ```
 
 #### `GET /api/rooms/:id/players`
@@ -111,17 +143,34 @@ DELETE /api/rooms/:id/players/:userId → Remover jogador
 ```json
 {
   "players": [
-    { "id": "uuid", "name": "Ana", "score": 10, "role": "player", "joined_at": "..." },
-    { "id": "uuid", "name": "Bob", "score": 5, "role": "player", "joined_at": "..." }
+    {
+      "user_id": "uuid",
+      "name": "Ana",
+      "role": "player",
+      "score_cache": 10,
+      "online": true,
+      "is_duplicate": false,
+      "player_code": "A1B2"
+    }
   ]
 }
 ```
+
+> `player_code` é apenas exibição (4 últimos hex do UUID). `online` vem dos sockets conectados.
 
 #### `DELETE /api/rooms/:id/players/:userId`
 
 Apresentador pode remover um jogador da sala.
 
-**Resposta:** `{ "ok": true }`
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| presenter_id | string | Deve ser o `presenter_id` da sala |
+
+**Resposta:** `{ "ok": true }` — ou `403` se quem pediu não for o apresentador.
+
+> A UI usa o evento WebSocket `jogador:remover` para que a remoção seja
+> refletida em tempo real nos outros clientes. A remoção mantém a sessão
+> bloqueada até `jogo:resetar` ou o encerramento da sala.
 
 ---
 
@@ -174,6 +223,9 @@ Jogador entra na sala (após já ter o código via HTTP).
 ```
 
 **Servidor responde:** `sala:status` com estado completo.
+Ack: `{ "ok": true, "user": { ... }, "adopted": false }`.
+Erros: `NAME_TAKEN` (409 no HTTP equivalente), `KICKED`, `ROOM_NOT_FOUND`, `USER_NOT_FOUND`.
+Se a identidade for adotada no socket, o servidor também emite `sessao:adotada`.
 
 ---
 
@@ -346,6 +398,47 @@ Jogador ou apresentador sai da sala.
 ```
 
 **Servidor emite para todos:** `sala:jogadores` (lista atualizada)
+**Ack:** `{ "ok": true }`
+
+---
+
+#### `jogador:remover`
+
+Apresentador remove um jogador da sala (tempo real).
+
+```json
+{
+  "event": "jogador:remover",
+  "data": { "room_id": "uuid", "user_id": "uuid" }
+}
+```
+
+**Servidor:**
+1. Valida que o socket pertence ao `presenter_id` da sala.
+2. Marca o jogador como removido (`left_at` + `kicked_at`), tira do placar e
+   apaga as respostas dele nas rodadas da sala.
+3. Emite `sala:removido` para os sockets do removido e os retira da sala.
+4. Emite `sala:status` para todos (painel, placar e OBS).
+5. **Ack:** `{ "ok": true }` ou `{ "ok": false, "error": "..." }`.
+
+---
+
+#### `usuario:renomear`
+
+Renomeia o usuário sem trocar de identidade/sessão.
+
+```json
+{
+  "event": "usuario:renomear",
+  "data": { "name": "Novo Nome" }
+}
+```
+
+**Servidor:** valida tamanho e conflito com outro jogador ativo da sala; atualiza
+`users` e o nome em todas as salas do usuário; reemite `sala:status` +
+`sala:jogadores`.
+
+**Ack:** `{ "ok": true, "user": { ... } }` ou `{ "ok": false, "code": "NAME_TAKEN", "error": "..." }`.
 
 ---
 
@@ -354,7 +447,9 @@ Jogador ou apresentador sai da sala.
 | Evento | Para quem | Quando |
 |--------|-----------|--------|
 | `sala:status` | Todos (ao conectar) | Estado completo da sala |
-| `sala:jogadores` | Todos | Alguém entrou ou saiu |
+| `sala:jogadores` | Todos | Alguém entrou, saiu, ficou online/offline ou foi removido |
+| `sala:removido` | Jogador removido | Apresentador removeu este jogador |
+| `sessao:adotada` | Jogador | Sessão nova reutilizou a identidade de uma entrada offline |
 | `rodada:iniciada` | Todos | Apresentador iniciou rodada |
 | `rodada:proxima` | Todos | Apresentador avançou rodada |
 | `buzina:ordem` | Todos | Alguém apertou a buzina |
@@ -376,8 +471,24 @@ Jogador ou apresentador sai da sala.
       "notes": "https://..."
     },
     "players": [
-      { "id": "uuid", "name": "Ana", "role": "player", "score": 10, "online": true },
-      { "id": "uuid", "name": "Bob", "role": "player", "score": 5, "online": true }
+      {
+        "user_id": "uuid",
+        "name": "Ana",
+        "role": "player",
+        "score_cache": 10,
+        "online": true,
+        "is_duplicate": false,
+        "player_code": "A1B2"
+      },
+      {
+        "user_id": "uuid",
+        "name": "Bob",
+        "role": "player",
+        "score_cache": 5,
+        "online": false,
+        "is_duplicate": false,
+        "player_code": "C3D4"
+      }
     ],
     "current_round": {
       "id": "uuid",
@@ -415,7 +526,8 @@ Jogador ou apresentador sai da sala.
 | Buscar sala por código        | ✅   |           |
 | Editar sala (título, notas)   | ✅   |           |
 | Listar jogadores              | ✅   |           |
-| Remover jogador               | ✅   |           |
+| Remover jogador               | ✅   | ✅        |
+| Renomear (sem trocar sessão)  | ✅   | ✅        |
 | Histórico de rodadas          | ✅   |           |
 | Entrar na sala (conectar)     |      | ✅        |
 | Iniciar rodada                |      | ✅        |

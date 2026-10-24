@@ -5,7 +5,9 @@ import {
   registerBuzz, getBuzzerOrder,
   upsertAnswer, judgeAnswer, getRoundAnswers,
   updateScoreCache, getRoomScores, resetRoomGame,
-  addPlayerToRoom, removePlayerFromRoom,
+  joinRoomAsPlayer, removePlayerFromRoom, kickPlayerFromRoom,
+  bindPlayerSocket, unbindPlayerSocket, listPlayerSocketIds,
+  isActiveRoomMember, renameUser, isNameTakenInRoom, sanitizePlayerName,
 } from '../store/queries.js';
 
 type ClientData = {
@@ -14,6 +16,8 @@ type ClientData = {
 };
 
 const clientMap = new Map<string, ClientData>();
+
+type Ack = ((res: any) => void) | undefined;
 
 export function setupSocketEvents(io: Server) {
   io.on('connection', (socket: Socket) => {
@@ -26,6 +30,11 @@ export function setupSocketEvents(io: Server) {
 
     if (roomId && userId) {
       socket.join(roomId);
+      // Só conta presença quem realmente é membro ativo da sala
+      // (o socket sintético do OBS, por exemplo, não entra).
+      if (isActiveRoomMember(roomId, userId)) {
+        bindPlayerSocket(roomId, userId, socket.id);
+      }
       console.log(`[WS] socket ${socket.id} joined room ${roomId}, emitting sala:status`);
       emitRoomStatus(io, roomId);
     } else {
@@ -34,21 +43,128 @@ export function setupSocketEvents(io: Server) {
 
     // ─── Sala: entrar ───────────────────────────────
 
-    socket.on('sala:entrar', (data: { room_id: string; user_id: string }) => {
+    socket.on('sala:entrar', (data: { room_id: string; user_id: string }, ack?: Ack) => {
+      const result = joinRoomAsPlayer(data.room_id, data.user_id);
+      if (!result.ok) {
+        socket.emit('erro', { code: result.code, message: result.message });
+        ack?.({ ok: false, code: result.code, error: result.message });
+        return;
+      }
+
+      const previousUserId = clientMap.get(socket.id)?.user_id;
+      if (previousUserId && previousUserId !== result.user.id) {
+        unbindPlayerSocket(data.room_id, previousUserId, socket.id);
+      }
+
       socket.join(data.room_id);
-      clientMap.set(socket.id, { room_id: data.room_id, user_id: data.user_id });
-      addPlayerToRoom(data.room_id, data.user_id, 'player');
+      clientMap.set(socket.id, { room_id: data.room_id, user_id: result.user.id });
+      bindPlayerSocket(data.room_id, result.user.id, socket.id);
+
+      if (result.adopted) {
+        socket.emit('sessao:adotada', { user: result.user });
+      }
+
       emitRoomStatus(io, data.room_id);
       io.to(data.room_id).emit('sala:jogadores', { players: listRoomPlayers(data.room_id) });
+      ack?.({ ok: true, user: result.user, adopted: result.adopted });
     });
 
     // ─── Sala: sair ────────────────────────────────
 
-    socket.on('sala:sair', (data: { room_id: string; user_id: string }) => {
-      removePlayerFromRoom(data.room_id, data.user_id);
-      socket.leave(data.room_id);
+    socket.on('sala:sair', (data: { room_id: string; user_id: string }, ack?: Ack) => {
+      const current = clientMap.get(socket.id);
+      if (!current || current.user_id !== data.user_id) {
+        ack?.({ ok: false });
+        return;
+      }
+
+      const roomToLeave = current.room_id ?? data.room_id;
+      removePlayerFromRoom(roomToLeave, data.user_id);
+      unbindPlayerSocket(roomToLeave, data.user_id, socket.id);
+      socket.leave(roomToLeave);
       clientMap.delete(socket.id);
-      io.to(data.room_id).emit('sala:jogadores', { players: listRoomPlayers(data.room_id) });
+      // Status completo: além do painel do apresentador, atualiza o placar/OBS
+      // (o jogador que saiu deixa de pontuar na sala).
+      emitRoomStatus(io, roomToLeave);
+      ack?.({ ok: true });
+    });
+
+    // ─── Jogador: renomear (no lugar) ──────────────
+
+    socket.on('usuario:renomear', (data: { name: string }, ack?: Ack) => {
+      const current = clientMap.get(socket.id);
+      if (!current?.user_id) {
+        ack?.({ ok: false, error: 'Sessão não encontrada' });
+        return;
+      }
+
+      const name = sanitizePlayerName(data?.name);
+      if (!name) {
+        ack?.({ ok: false, error: 'Nome inválido (use de 1 a 50 caracteres)' });
+        return;
+      }
+
+      if (current.room_id) {
+        const room = findRoomById(current.room_id);
+        const isPresenter = room?.presenter_id === current.user_id;
+        // O apresentador não aparece na lista de jogadores; a unicidade de
+        // nome vale apenas entre jogadores.
+        if (!isPresenter && isNameTakenInRoom(current.room_id, name, current.user_id)) {
+          const message = `Já existe um jogador "${name}" nesta sala`;
+          socket.emit('erro', { code: 'NAME_TAKEN', message });
+          ack?.({ ok: false, code: 'NAME_TAKEN', error: message });
+          return;
+        }
+      }
+
+      const user = renameUser(current.user_id, name);
+      if (!user) {
+        ack?.({ ok: false, error: 'Usuário não encontrado' });
+        return;
+      }
+
+      if (current.room_id) {
+        emitRoomStatus(io, current.room_id);
+        io.to(current.room_id).emit('sala:jogadores', { players: listRoomPlayers(current.room_id) });
+      }
+
+      ack?.({ ok: true, user });
+    });
+
+    // ─── Jogador: remover (apresentador) ───────────
+
+    socket.on('jogador:remover', (data: { room_id: string; user_id: string }, ack?: Ack) => {
+      const room = findRoomById(data.room_id);
+      const presenterId = clientMap.get(socket.id)?.user_id;
+
+      if (!room || !presenterId || presenterId !== room.presenter_id) {
+        const message = 'Apenas o apresentador pode remover jogadores';
+        socket.emit('erro', { code: 'NAO_AUTORIZADO', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+
+      const targetSocketIds = listPlayerSocketIds(data.room_id, data.user_id);
+      const result = kickPlayerFromRoom(data.room_id, data.user_id);
+      if (!result.ok) {
+        socket.emit('erro', { code: result.code, message: result.message });
+        ack?.({ ok: false, error: result.message });
+        return;
+      }
+
+      for (const socketId of targetSocketIds) {
+        io.to(socketId).emit('sala:removido', {
+          room_id: data.room_id,
+          message: 'Você foi removido da sala pelo apresentador',
+        });
+        io.sockets.sockets.get(socketId)?.leave(data.room_id);
+        unbindPlayerSocket(data.room_id, data.user_id, socketId);
+        clientMap.delete(socketId);
+      }
+
+      console.log(`[PLAYER] kick room=${data.room_id} user=${data.user_id} by=${presenterId}`);
+      emitRoomStatus(io, data.room_id);
+      ack?.({ ok: true });
     });
 
     // ─── Rodada: iniciar ───────────────────────────
@@ -79,6 +195,13 @@ export function setupSocketEvents(io: Server) {
     // ─── Buzina: apertar ───────────────────────────
 
     socket.on('buzina:apertar', (data: { room_id: string; round_id: string; player_id: string }) => {
+      const clientData = clientMap.get(socket.id);
+      if (!clientData?.room_id || clientData.user_id !== data.player_id ||
+          !isActiveRoomMember(clientData.room_id, data.player_id)) {
+        socket.emit('erro', { code: 'NAO_AUTORIZADO', message: 'Jogador não está ativo na sala' });
+        return;
+      }
+
       const event = registerBuzz(data.round_id, data.player_id);
 
       if (!event) {
@@ -101,10 +224,13 @@ export function setupSocketEvents(io: Server) {
     // ─── Resposta: escrever ────────────────────────
 
     socket.on('resposta:escrever', (data: { round_id: string; player_id: string; text: string }) => {
-      upsertAnswer(data.round_id, data.player_id, data.text);
-
       const clientData = clientMap.get(socket.id);
-      if (!clientData?.room_id) return;
+      if (!clientData?.room_id || clientData.user_id !== data.player_id ||
+          !isActiveRoomMember(clientData.room_id, data.player_id)) {
+        return;
+      }
+
+      upsertAnswer(data.round_id, data.player_id, data.text);
 
       const room = findRoomById(clientData.room_id);
       if (!room) return;
@@ -127,19 +253,16 @@ export function setupSocketEvents(io: Server) {
     // ─── Pontos: alterar ───────────────────────────
 
     socket.on('pontos:alterar', (data: { room_id: string; round_id: string; player_id: string; score_delta: number; judgment: string }) => {
-      const clientData = clientMap.get(socket.id);
-      const judgeId = clientData?.user_id;
-      if (!judgeId) return;
+      const room = findRoomById(data.room_id);
+      const judgeId = clientMap.get(socket.id)?.user_id;
+      if (!room || !judgeId || judgeId !== room.presenter_id) {
+        socket.emit('erro', { code: 'NAO_AUTORIZADO', message: 'Apenas o apresentador pode alterar pontos' });
+        return;
+      }
 
       judgeAnswer(data.round_id, data.player_id, data.judgment as any, data.score_delta, judgeId);
 
       // Atualizar score_cache
-      const answers = getRoundAnswers(data.round_id);
-      const totalFromAnswers = answers
-        .filter(a => a.player_id === data.player_id)
-        .reduce((sum, a) => sum + a.score_delta, 0);
-
-      // Pega score anterior + delta atual
       const players = listRoomPlayers(data.room_id);
       const player = players.find(p => p.user_id === data.player_id);
       const newScore = (player?.score_cache || 0) + data.score_delta;
@@ -172,7 +295,9 @@ export function setupSocketEvents(io: Server) {
 
     socket.on('disconnect', () => {
       const data = clientMap.get(socket.id);
-      if (data?.room_id) {
+      if (data?.room_id && data.user_id) {
+        // Não remove a membership: marca apenas offline para permitir reconexão.
+        unbindPlayerSocket(data.room_id, data.user_id, socket.id);
         io.to(data.room_id).emit('sala:jogadores', { players: listRoomPlayers(data.room_id) });
       }
       clientMap.delete(socket.id);
@@ -203,6 +328,9 @@ function emitRoomStatus(io: Server, roomId: string) {
       name: p.name,
       role: p.role,
       score_cache: p.score_cache,
+      online: p.online,
+      is_duplicate: p.is_duplicate,
+      player_code: p.player_code,
     })),
     scores,
     current_round: currentRound ? {

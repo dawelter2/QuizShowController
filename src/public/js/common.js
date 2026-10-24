@@ -28,9 +28,10 @@ document.addEventListener('click', (e) => {
   }
 });
 
-function api(path, data) {
+function api(path, data, method) {
+  const httpMethod = method || (data ? 'POST' : 'GET');
   return fetch('/api' + path, {
-    method: data ? 'POST' : 'GET',
+    method: httpMethod,
     headers: { 'Content-Type': 'application/json' },
     body: data ? JSON.stringify(data) : undefined,
   }).then(r => r.json());
@@ -111,21 +112,53 @@ function requireRoom(code) {
   });
 }
 
+// Sai da sala aguardando o servidor confirmar (evita fantasma se o socket
+// for desconectado antes do pacote de saída ser entregue).
 function handleLeaveRoom() {
-  if (state.socket && state.room) {
-    state.socket.emit('sala:sair', { room_id: state.room.id, user_id: state.user.id });
-    state.socket.disconnect();
+  if (!state.socket || !state.room || !state.user) {
+    localStorage.removeItem('last_room_code');
+    location.href = '/';
+    return;
   }
-  localStorage.removeItem('last_room_code');
-  location.href = '/';
+
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    try { state.socket.disconnect(); } catch (_) { /* ignore */ }
+    localStorage.removeItem('last_room_code');
+    location.href = '/';
+  };
+
+  const fallback = setTimeout(finish, 1500);
+  state.socket.timeout(1200).emit(
+    'sala:sair',
+    { room_id: state.room.id, user_id: state.user.id },
+    () => { clearTimeout(fallback); finish(); },
+  );
 }
 
-function handleChangeName() {
-  if (state.socket && state.room) {
-    state.socket.emit('sala:sair', { room_id: state.room.id, user_id: state.user.id });
-    state.socket.disconnect();
+// Renomeia no lugar (mesmo user_id, mesmos pontos, mesma sessão).
+function handleRename() {
+  if (!state.user) return;
+  if (!state.socket || !state.socket.connected) {
+    toast('Sem conexão com a sala');
+    return;
   }
-  localStorage.removeItem('session_id');
-  localStorage.removeItem('last_room_code');
-  location.href = '/';
+
+  const current = state.user.name || '';
+  const typed = prompt('Seu nome:', current);
+  if (typed === null) return;
+
+  const name = typed.trim().replace(/\s+/g, ' ');
+  if (!name) return toast('Digite um nome');
+  if (name === current) return;
+
+  state.socket.timeout(1500).emit('usuario:renomear', { name }, (err, res) => {
+    if (err) return toast('Não foi possível mudar o nome');
+    if (!res || !res.ok) return toast(res?.error || 'Nome indisponível');
+    state.user = res.user;
+    if ($('player-name')) $('player-name').textContent = state.user.name;
+    toast('Nome alterado para ' + state.user.name);
+  });
 }
