@@ -3,7 +3,6 @@ import {
   findRoomById, listRoomPlayers,
   createRound, closeRound, findCurrentRound, countRounds,
   registerBuzz, getBuzzerOrder,
-  upsertAnswer, judgeAnswer, getRoundAnswers,
   updateScoreCache, getRoomScores, resetRoomGame,
   joinRoomAsPlayer, removePlayerFromRoom, kickPlayerFromRoom,
   bindPlayerSocket, unbindPlayerSocket, listPlayerSocketIds,
@@ -221,46 +220,15 @@ export function setupSocketEvents(io: Server) {
       });
     });
 
-    // ─── Resposta: escrever ────────────────────────
-
-    socket.on('resposta:escrever', (data: { round_id: string; player_id: string; text: string }) => {
-      const clientData = clientMap.get(socket.id);
-      if (!clientData?.room_id || clientData.user_id !== data.player_id ||
-          !isActiveRoomMember(clientData.room_id, data.player_id)) {
-        return;
-      }
-
-      upsertAnswer(data.round_id, data.player_id, data.text);
-
-      const room = findRoomById(clientData.room_id);
-      if (!room) return;
-
-      const player = listRoomPlayers(clientData.room_id).find(p => p.user_id === data.player_id);
-      const playerName = player?.name ?? data.player_id;
-
-      // Só manda resposta pro apresentador
-      const presenterSocketId = getPresenterSocketId(io, clientData.room_id, room.presenter_id);
-      if (presenterSocketId) {
-        io.to(presenterSocketId).emit('resposta:atualizada', {
-          round_id: data.round_id,
-          player_id: data.player_id,
-          player_name: playerName,
-          text: data.text,
-        });
-      }
-    });
-
     // ─── Pontos: alterar ───────────────────────────
 
-    socket.on('pontos:alterar', (data: { room_id: string; round_id: string; player_id: string; score_delta: number; judgment: string }) => {
+    socket.on('pontos:alterar', (data: { room_id: string; round_id: string; player_id: string; score_delta: number }) => {
       const room = findRoomById(data.room_id);
-      const judgeId = clientMap.get(socket.id)?.user_id;
-      if (!room || !judgeId || judgeId !== room.presenter_id) {
+      const presenterId = clientMap.get(socket.id)?.user_id;
+      if (!room || !presenterId || presenterId !== room.presenter_id) {
         socket.emit('erro', { code: 'NAO_AUTORIZADO', message: 'Apenas o apresentador pode alterar pontos' });
         return;
       }
-
-      judgeAnswer(data.round_id, data.player_id, data.judgment as any, data.score_delta, judgeId);
 
       // Atualizar score_cache
       const players = listRoomPlayers(data.room_id);
@@ -339,25 +307,6 @@ function emitRoomStatus(io: Server, roomId: string) {
       status: currentRound.status,
       media_url: currentRound.media_url,
       buzzer_order: getBuzzerOrder(currentRound.id),
-      answers: getRoundAnswers(currentRound.id).map(a => ({
-        player_id: a.player_id,
-        player_name: a.player_name,
-        text: a.text,
-      })),
     } : null,
   });
-}
-
-function getPresenterSocketId(io: Server, roomId: string, presenterId: string): string | null {
-  const sockets = io.sockets.adapter.rooms.get(roomId);
-  if (!sockets) return null;
-
-  for (const socketId of sockets) {
-    const socket = io.sockets.sockets.get(socketId);
-    if (socket) {
-      const data = clientMap.get(socketId);
-      if (data?.user_id === presenterId) return socketId;
-    }
-  }
-  return null;
 }

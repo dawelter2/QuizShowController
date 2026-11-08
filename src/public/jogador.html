@@ -7,7 +7,7 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #e0e0e0; min-height: 100vh; }
-  input, button, textarea { font: inherit; }
+  input, button { font: inherit; }
   button { -webkit-tap-highlight-color: transparent; }
   .hidden { display: none !important; }
 
@@ -66,9 +66,6 @@
   .dropdown-menu button { display: block; width: 100%; padding: .6rem 1rem; text-align: left; border: none; background: none; color: #e0e0e0; font-size: .85rem; cursor: pointer; }
   .dropdown-menu button:hover { background: #2a2a3e; }
   .dropdown-menu .divider { height: 1px; background: #2a2a3e; margin: .25rem 0; }
-
-  textarea { width: 100%; max-width: 400px; padding: .75rem; border-radius: 8px; border: 1px solid #2a2a3e; background: #16162a; color: #e0e0e0; font-size: 1rem; resize: none; height: 80px; outline: none; }
-  textarea:focus { border-color: #6c5ce7; }
 
   /* Status Bar Mobile Friendly */
   .status-bar { display: flex; gap: .5rem; align-items: center; justify-content: center; margin-bottom: 1rem; flex-wrap: wrap; width: 100%; }
@@ -147,7 +144,6 @@
     <span id="buzzer-pos" class="buzzer-pos-badge"></span>
     🔔
   </button>
-  <textarea id="player-answer" placeholder="Digite sua resposta..." disabled></textarea>
   <div id="player-buzzer-order" class="buzzer-order"></div>
 </div>
 

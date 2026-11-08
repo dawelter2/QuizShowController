@@ -1,6 +1,5 @@
 // Estado específico do apresentador
 state.currentRoundId = null;
-state.answers = {};
 state.buzzerOrder = [];
 state.autoNextRound = false;
 state.showVideo = false;
@@ -89,7 +88,6 @@ function renderPresenterScores(scores) {
 function renderBuzzerOrder(order) {
   state.buzzerOrder = order || [];
   renderBuzzerOrderList();
-  renderAnswers();
 }
 
 function renderBuzzerOrderList() {
@@ -137,35 +135,6 @@ function renderBuzzerOrderList() {
   }).join('');
 }
 
-function renderAnswers() {
-  const container = $('pres-answers');
-  const order = state.buzzerOrder || [];
-  const seen = new Set();
-  const sorted = [];
-  order.forEach(o => {
-    if (state.answers[o.player_id]) {
-      sorted.push({ position: o.position, ...state.answers[o.player_id] });
-      seen.add(o.player_id);
-    }
-  });
-  Object.entries(state.answers).forEach(([pid, a]) => {
-    if (!seen.has(pid)) sorted.push({ position: null, ...a });
-  });
-
-  if (sorted.length === 0) {
-    container.innerHTML = '<p class="panel-empty">Nenhuma resposta ainda.</p>';
-    return;
-  }
-
-  container.innerHTML = sorted.map(a => `
-    <div class="answer-row">
-      <span class="answer-pos">${a.position ? a.position + 'º' : '—'}</span>
-      <span class="answer-name">${escapeHtml(a.player_name || '')}</span>
-      <span class="answer-text">${escapeHtml(a.text || '')}</span>
-    </div>
-  `).join('');
-}
-
 function updateRoundButton(isRoundActive) {
   const btn = $('btn-round-control');
   if (!btn) return;
@@ -184,10 +153,6 @@ function applyRoundSnapshot(round) {
     const sameRound = state.currentRoundId === round.id;
     state.currentRoundId = round.id;
     state.buzzerOrder = round.buzzer_order || [];
-    state.answers = {};
-    (round.answers || []).forEach(a => {
-      state.answers[a.player_id] = { player_name: a.player_name, text: a.text };
-    });
     // Ao reconectar no meio da rodada, mantém quem já foi pontuado fora da ordem.
     if (!sameRound) state.judgedPlayers.clear();
     $('pres-round-num').textContent = round.round_number;
@@ -196,7 +161,6 @@ function applyRoundSnapshot(round) {
   } else {
     state.currentRoundId = null;
     state.buzzerOrder = [];
-    state.answers = {};
     state.judgedPlayers.clear();
     $('pres-round-num').textContent = '1';
     updateRoundButton(false);
@@ -320,7 +284,6 @@ function changeScore(playerId, delta) {
     round_id: state.currentRoundId,
     player_id: playerId,
     score_delta: delta,
-    judgment: delta > 0 ? (delta >= 3 ? 'na_mosca' : 'raspando') : 'errado',
   });
   if (state.autoNextRound) {
     handleNextRound();
@@ -385,7 +348,6 @@ function connectPresenterSocket() {
 
   state.socket.on('rodada:iniciada', (data) => {
     state.currentRoundId = data.round_id;
-    state.answers = {};
     state.buzzerOrder = [];
     state.judgedPlayers.clear();
     $('pres-round-num').textContent = data.round_number;
@@ -399,16 +361,10 @@ function connectPresenterSocket() {
     renderBuzzerOrder(data.order || []);
   });
 
-  state.socket.on('resposta:atualizada', (data) => {
-    state.answers[data.player_id] = { player_name: data.player_name, text: data.text };
-    renderAnswers();
-  });
-
   state.socket.on('placar:atualizado', (data) => renderPresenterScores(data.scores));
 
   state.socket.on('rodada:proxima', () => {
     state.currentRoundId = null;
-    state.answers = {};
     state.buzzerOrder = [];
     state.judgedPlayers.clear();
     updateRoundButton(false);

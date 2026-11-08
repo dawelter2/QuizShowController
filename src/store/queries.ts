@@ -60,18 +60,6 @@ export type BuzzerEvent = {
   timestamp: string;
 };
 
-export type Answer = {
-  id: string;
-  round_id: string;
-  player_id: string;
-  text: string;
-  submitted_at: string;
-  judgment: 'na_mosca' | 'raspando' | 'errado' | 'none';
-  score_delta: number;
-  judged_by: string | null;
-  judged_at: string | null;
-};
-
 // ─── State ───────────────────────────────────────────
 
 const usersById = new Map<string, User>();
@@ -90,7 +78,6 @@ const roundsMap = new Map<string, Round>();
 const roomRoundsMap = new Map<string, string[]>(); // room_id → [round_id]
 
 const buzzersMap = new Map<string, BuzzerEvent[]>(); // round_id → ordered events
-const answersMap = new Map<string, Answer>();        // `${round_id}:${player_id}` → Answer
 
 // Janela em que uma entrada recém-criada (ainda sem socket) reserva o nome.
 const CLAIM_TTL_MS = 10_000;
@@ -438,14 +425,6 @@ export function kickPlayerFromRoom(roomId: string, userId: string): KickPlayerRe
   player.left_at = now;
   player.kicked_at = now;
 
-  // Remove respostas do jogador nas rodadas desta sala (evita fantasma no painel).
-  const roomRoundIds = new Set(roomRoundsMap.get(roomId) ?? []);
-  for (const [key, answer] of answersMap) {
-    if (answer.player_id === userId && roomRoundIds.has(answer.round_id)) {
-      answersMap.delete(key);
-    }
-  }
-
   touchRoom(roomId);
   return { ok: true };
 }
@@ -538,42 +517,6 @@ export function getBuzzerOrder(roundId: string): (BuzzerEvent & { player_name: s
     ...e,
     player_name: usersById.get(e.player_id)?.name ?? e.player_id,
   }));
-}
-
-// ─── Answers ─────────────────────────────────────────
-
-export function upsertAnswer(roundId: string, playerId: string, text: string): Answer {
-  const round = roundsMap.get(roundId);
-  const key = `${roundId}:${playerId}`;
-  const existing = answersMap.get(key);
-  if (existing) {
-    existing.text = text;
-    existing.submitted_at = new Date().toISOString();
-    if (round) touchRoom(round.room_id);
-    return existing;
-  }
-  const answer: Answer = { id: uuid(), round_id: roundId, player_id: playerId, text, submitted_at: new Date().toISOString(), judgment: 'none', score_delta: 0, judged_by: null, judged_at: null };
-  answersMap.set(key, answer);
-  if (round) touchRoom(round.room_id);
-  return answer;
-}
-
-export function judgeAnswer(roundId: string, playerId: string, judgment: Answer['judgment'], scoreDelta: number, judgeId: string) {
-  const round = roundsMap.get(roundId);
-  const answer = answersMap.get(`${roundId}:${playerId}`);
-  if (answer) {
-    answer.judgment = judgment;
-    answer.score_delta = scoreDelta;
-    answer.judged_by = judgeId;
-    answer.judged_at = new Date().toISOString();
-    if (round) touchRoom(round.room_id);
-  }
-}
-
-export function getRoundAnswers(roundId: string): (Answer & { player_name: string })[] {
-  return Array.from(answersMap.values())
-    .filter(a => a.round_id === roundId)
-    .map(a => ({ ...a, player_name: usersById.get(a.player_id)?.name ?? a.player_id }));
 }
 
 // ─── Scores ──────────────────────────────────────────

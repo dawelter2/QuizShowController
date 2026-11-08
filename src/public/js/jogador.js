@@ -1,5 +1,4 @@
 state.currentRoundId = null;
-let answerTimeout = null;
 let allScores = [];
 
 function setBuzzerState(mode) {
@@ -32,7 +31,6 @@ function renderBuzzerOrder(order) {
 }
 
 function applyRoundSnapshot(round) {
-  const answer = $('player-answer');
   const buzzer = $('player-buzzer');
   if (round && round.status === 'active') {
     state.currentRoundId = round.id;
@@ -42,9 +40,6 @@ function applyRoundSnapshot(round) {
     setBuzzerState(myBuzz ? 'pressed' : 'active');
     updateBuzzerBadge(myBuzz?.position);
     buzzer.classList.toggle('first-buzz', order[0]?.player_id === state.user.id);
-    answer.disabled = false;
-    const myAnswer = (round.answers || []).find(a => a.player_id === state.user.id);
-    answer.value = myAnswer?.text || '';
     renderBuzzerOrder(order);
   } else {
     state.currentRoundId = null;
@@ -52,8 +47,6 @@ function applyRoundSnapshot(round) {
     setBuzzerState('disabled');
     updateBuzzerBadge(null);
     buzzer.classList.remove('first-buzz');
-    answer.disabled = true;
-    answer.value = '';
     renderBuzzerOrder([]);
   }
 }
@@ -147,8 +140,6 @@ function connectPlayerSocket() {
     $('player-status-round-num').textContent = data.round_number;
     setBuzzerState('active');
     updateBuzzerBadge(null);
-    $('player-answer').disabled = false;
-    $('player-answer').value = '';
     renderBuzzerOrder([]);
     showRoundGo();
     if (navigator.vibrate) navigator.vibrate(60);
@@ -191,8 +182,6 @@ function connectPlayerSocket() {
     setBuzzerState('disabled');
     updateBuzzerBadge(null);
     $('player-buzzer').classList.remove('first-buzz');
-    $('player-answer').disabled = true;
-    $('player-answer').value = '';
     renderBuzzerOrder([]);
   });
 
@@ -204,19 +193,6 @@ function connectPlayerSocket() {
     }
   });
 }
-
-// Input handler para textarea — registra após o DOM estar pronto (script no final do body já garante)
-$('player-answer').addEventListener('input', function() {
-  if (!state.currentRoundId || this.disabled) return;
-  clearTimeout(answerTimeout);
-  answerTimeout = setTimeout(() => {
-    state.socket.emit('resposta:escrever', {
-      round_id: state.currentRoundId,
-      player_id: state.user.id,
-      text: this.value,
-    });
-  }, 300);
-});
 
 // ─── Placar Overlay ──────────────────────────────
 function renderPlacarOverlay() {
