@@ -36,20 +36,17 @@
   .mt-1 { margin-top: 1rem; }
   .mb-1 { margin-bottom: 1rem; }
 
-  .player-card { background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 8px; padding: 1rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; transition: all 0.2s ease; }
-  .player-card .name { font-weight: 700; font-size: 1.4rem; color: #fff; }
-  .player-card .score { font-size: 1.5rem; font-weight: 800; color: #fdcb6e; }
-  .player-card .score-actions { display: flex; gap: .25rem; }
-  .player-card .score-actions button { width: 36px; height: 36px; border-radius: 6px; border: none; cursor: pointer; font-weight: 700; font-size: .9rem; }
+  .player-card { background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 8px; padding: .65rem .75rem; display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; transition: all 0.2s ease; }
+  .player-card .rank-medal { width: 30px; flex-shrink: 0; text-align: center; font-size: 1.1rem; font-weight: 800; color: #a0a0b8; line-height: 1; }
+  .player-card .player-identity { display: flex; align-items: center; gap: .15rem; flex: 1; min-width: 0; }
+  .player-card .name { font-weight: 700; font-size: 1.15rem; color: #fff; }
+  .player-card .score { font-size: 1.4rem; font-weight: 800; color: #fdcb6e; font-variant-numeric: tabular-nums; }
+  .player-card .player-score-actions { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+  .player-card.podium-1 { border-color: rgba(253,203,110,.7); background: linear-gradient(90deg, rgba(253,203,110,.14), #1a1a2e 65%); box-shadow: 0 0 16px rgba(253,203,110,.16); }
+  .player-card.podium-2 { border-color: rgba(178,190,195,.55); background: linear-gradient(90deg, rgba(178,190,195,.10), #1a1a2e 65%); }
+  .player-card.podium-3 { border-color: rgba(225,112,85,.55); background: linear-gradient(90deg, rgba(225,112,85,.10), #1a1a2e 65%); }
   .btn-plus { background: #00b894; color: #fff; }
   .btn-minus { background: #d63031; color: #fff; }
-
-  /* Destaque para quem buzinou */
-  .player-card.is-buzzed { border-color: #6c5ce7; background: #232342; }
-  .player-card.is-first-buzz { border-color: #fdcb6e; box-shadow: 0 0 15px rgba(253,203,110,0.4); background: linear-gradient(90deg, #1a1a2e, #2a2a4a); }
-  .player-card .buzz-pos { background: #6c5ce7; color: #fff; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.9rem; font-weight: 800; margin-right: 0.75rem; }
-  .player-card.is-first-buzz .buzz-pos { background: #fdcb6e; color: #1a1a2e; }
-  .player-card .buzz-delta { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85rem; font-weight: 700; color: #a29bfe; margin-left: 0.75rem; opacity: 0.9; }
 
   /* Presença e remoção */
   .player-card.is-offline { opacity: .62; }
@@ -62,28 +59,55 @@
 
   /* ─── Compacto: modo vídeo ativo ─── */
   .content.layout-video .video-toggle { padding: .35rem .6rem; font-size: .8rem; }
-  .content.layout-video h2 { font-size: 1rem; margin-bottom: .5rem; }
-  .content.layout-video .player-card { padding: .45rem .6rem; flex-wrap: nowrap; gap: .35rem; margin-bottom: .35rem; }
-  .content.layout-video .player-card .name { font-size: .95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 1; min-width: 0; }
-  .content.layout-video .player-card .score { font-size: 1.1rem; min-width: 36px; flex-shrink: 0; }
-  .content.layout-video .player-card .score-actions { gap: .15rem; flex-shrink: 0; }
-  .content.layout-video .player-card .score-actions button { width: 26px; height: 26px; font-size: .65rem; }
-  .content.layout-video .player-card .buzz-pos { font-size: .7rem; padding: .1rem .35rem; margin-right: .35rem; }
-  .content.layout-video .player-card .buzz-delta { font-size: .7rem; margin-left: .35rem; }
+  .content.layout-video .player-card { padding: .32rem .5rem; gap: .3rem; margin-bottom: .22rem; }
+  .content.layout-video .player-card .rank-medal { width: 22px; font-size: .9rem; }
+  .content.layout-video .player-card .player-identity { gap: .1rem; }
+  .content.layout-video .player-card .name { font-size: .92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 1; min-width: 0; }
+  .content.layout-video .player-card .score { font-size: 1rem; min-width: 30px; flex-shrink: 0; text-align: right; }
+  .content.layout-video .player-card .player-score-actions { gap: .3rem; }
   .content.layout-video .player-card .player-code,
   .content.layout-video .player-card .badge-dup { display: none; }
-  .content.layout-video .player-card .btn-kick { width: 24px; height: 24px; font-size: .7rem; }
-  .content.layout-video .round-controls-wrap { margin-bottom: .35rem; }
+  .content.layout-video .player-card .btn-kick { width: 23px; height: 23px; font-size: .68rem; }
+  .content.layout-video .round-controls-wrap { margin-bottom: 0; }
   .content.layout-video .flex-row { gap: .35rem; }
   .content.layout-video .flex-row .btn { padding: .4rem .75rem; font-size: .85rem; min-width: 0; }
   .content.layout-video .toggle-row { float: none; display: flex; width: 100%; padding: .35rem .5rem; margin-bottom: .35rem; gap: .5rem; }
   .content.layout-video .toggle-label { font-size: .75rem; }
 
-  .buzzer-order { display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap; margin: 1rem 0; }
-  .buzzer-order .pos { background: #2a2a3e; border-radius: 8px; padding: .5rem 1rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
-  .buzzer-order .pos .num { background: #6c5ce7; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: .8rem; }
-  .buzzer-order .pos.first-buzz { background: #2a2a3e; border: 2px solid #fdcb6e; animation: goldPulse 1.2s ease-in-out infinite; }
+  /* ─── Cards isolados: ordem dos botões + placar ─── */
+  .panel { background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 12px; padding: .65rem .75rem; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .45rem; }
+  .panel-head h3 { font-size: .82rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #a0a0b8; }
+  .panel-hint { font-size: .68rem; color: #636e72; white-space: nowrap; }
+  .panel-body { min-height: 0; }
+  .panel-order .panel-body { max-height: 26vh; overflow-y: auto; }
+  .panel-answers .panel-body { max-height: 16vh; overflow-y: auto; }
+  .panel-score .panel-body { max-height: 48vh; overflow-y: auto; }
+  .panel-score { margin-top: auto; }
+  .panel-empty { margin: 0; color: #636e72; font-size: .82rem; padding: .35rem 0; }
+
+  .buzz-row { display: flex; align-items: center; gap: .5rem; padding: .38rem .5rem; margin-bottom: .28rem; border: 1px solid #2a2a3e; border-radius: 8px; background: #232342; animation: buzzIn .22s ease-out; }
+  .buzz-row:last-child { margin-bottom: 0; }
+  .buzz-row.first { border-color: #fdcb6e; background: linear-gradient(90deg, rgba(253,203,110,.16), #232342); animation: buzzIn .22s ease-out, goldPulse 1.8s ease-in-out infinite; }
+  .buzz-pos { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: #6c5ce7; color: #fff; font-size: .72rem; font-weight: 900; }
+  .buzz-row.first .buzz-pos { background: #fdcb6e; color: #1a1a2e; }
+  .buzz-name { flex: 1; min-width: 0; font-size: .95rem; font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .buzz-time { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: .68rem; font-weight: 700; color: #a29bfe; white-space: nowrap; }
+  .buzz-actions { display: flex; gap: .22rem; flex-shrink: 0; }
+  .buzz-actions button { min-width: 30px; height: 28px; border-radius: 5px; border: none; cursor: pointer; font-weight: 800; font-size: .68rem; padding: 0 .3rem; }
+  .content.layout-video .buzz-row { padding: .3rem .45rem; margin-bottom: .22rem; gap: .4rem; }
+  .content.layout-video .buzz-pos { width: 24px; height: 24px; font-size: .66rem; }
+  .content.layout-video .buzz-name { font-size: .9rem; }
+  .content.layout-video .buzz-actions { gap: .12rem; }
+  .content.layout-video .buzz-actions button { min-width: 24px; height: 23px; font-size: .58rem; padding: 0 .2rem; }
+  @keyframes buzzIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes goldPulse { 0%,100% { box-shadow: 0 0 8px rgba(253,203,110,.4); } 50% { box-shadow: 0 0 22px rgba(253,203,110,.95); } }
+
+  .answer-row { display: flex; align-items: baseline; gap: .4rem; padding: .32rem .1rem; border-bottom: 1px solid rgba(42,42,62,.7); font-size: .84rem; }
+  .answer-row:last-child { border-bottom: none; }
+  .answer-pos { min-width: 24px; color: #6c5ce7; font-size: .72rem; font-weight: 800; }
+  .answer-name { color: #e0e0e0; font-weight: 700; white-space: nowrap; }
+  .answer-text { color: #fdcb6e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .round-go { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 1000; opacity: 0; }
   .round-go .go-text { font-size: clamp(6rem, 22vw, 14rem); font-weight: 900; color: #fdcb6e; text-shadow: 0 0 40px rgba(253,203,110,.9), 0 0 80px rgba(253,203,110,.4); transform: scale(.3); letter-spacing: .05em; }
@@ -155,9 +179,30 @@
     flex: 1; min-height: 120px;
     color: #636e72; font-size: .85rem;
   }
-  .content-right { min-width: 0; overflow-y: auto; max-height: calc(100vh - 120px); padding-right: .25rem; }
-  .content.layout-video .content-right { max-height: calc(100vh - 70px); overflow-x: hidden; }
+  .video-demo-placeholder {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .6rem;
+    width: 100%; height: 100%; min-height: 180px; text-align: center;
+    background: radial-gradient(circle at 50% 42%, rgba(108,92,231,.35), rgba(8,8,12,.98) 68%);
+    color: #fdcb6e; font-size: 1.35rem; font-weight: 800; letter-spacing: .06em;
+  }
+  .video-demo-placeholder span { color: #a0a0b8; font-size: .72rem; font-weight: 700; letter-spacing: .25em; text-transform: uppercase; }
+  .preview-badge {
+    background: rgba(253,203,110,.12); border: 1px solid rgba(253,203,110,.45);
+    color: #fdcb6e; border-radius: 999px; padding: .3rem .7rem;
+    font-size: .68rem; font-weight: 800; letter-spacing: .06em; white-space: nowrap;
+  }
+  .content-right { min-width: 0; overflow-y: auto; max-height: calc(100vh - 120px); padding-right: .25rem; display: flex; flex-direction: column; gap: .65rem; }
+  .content-right .round-controls-wrap { margin-bottom: 0; }
+  .content.layout-video .content-right .round-controls-wrap { flex: 0 0 auto; }
+  .content.layout-video .content-right { height: calc(100vh - 90px); max-height: calc(100vh - 90px); overflow: hidden; }
   .content.layout-video .content-right > * { max-width: 100%; }
+  .content.layout-video .panel { display: flex; flex-direction: column; min-height: 0; padding: .55rem .65rem; }
+  .content.layout-video .panel-order { flex: 0 1 27%; min-height: 100px; }
+  .content.layout-video .panel-answers { flex: 0 1 10%; min-height: 64px; }
+  .content.layout-video .panel-score { flex: 1 1 auto; min-height: 150px; margin-top: 0; }
+  .content.layout-video .panel-order .panel-body,
+  .content.layout-video .panel-answers .panel-body,
+  .content.layout-video .panel-score .panel-body { flex: 1 1 auto; max-height: none; overflow-y: auto; }
 
   .video-panel .video-close-btn {
     position: absolute; top: .75rem; right: .75rem; z-index: 10;
@@ -226,15 +271,35 @@
         <span class="badge badge-primary">Rodada <span id="pres-round-num">1</span></span>
       </div>
     </div>
-    <h2>🏆 Placar</h2>
-    <div id="pres-players"></div>
-    <h2>✍️ Respostas</h2>
-    <div id="pres-answers"></div>
+    <section class="panel panel-order" aria-labelledby="pres-order-title">
+      <div class="panel-head">
+        <h3 id="pres-order-title">⚡ Ordem dos botões</h3>
+        <span class="panel-hint">cliques da rodada</span>
+      </div>
+      <div class="panel-body" id="pres-buzzer-order"></div>
+    </section>
+
+    <section class="panel panel-answers" aria-labelledby="pres-answers-title">
+      <div class="panel-head">
+        <h3 id="pres-answers-title">✍️ Respostas</h3>
+      </div>
+      <div class="panel-body" id="pres-answers"></div>
+    </section>
+
+    <section class="panel panel-score" aria-labelledby="pres-score-title">
+      <div class="panel-head">
+        <h3 id="pres-score-title">🏆 Placar</h3>
+        <span class="panel-hint">ordem dos pontos</span>
+      </div>
+      <div class="panel-body" id="pres-players"></div>
+    </section>
   </div>
 </div>
 
+<script>window.__PRESENTER_DEMO__ = new URLSearchParams(location.search).get('demo') === '1';</script>
 <script src="/socket.io/socket.io.js"></script>
 <script src="/js/common.js"></script>
 <script src="/js/apresentador.js"></script>
+<script src="/js/apresentador-demo.js"></script>
 </body>
 </html>

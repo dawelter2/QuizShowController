@@ -6,71 +6,48 @@ state.autoNextRound = false;
 state.showVideo = false;
 state.videoUrl = '';
 state.videoId = '';
+state.judgedPlayers = new Set();
+state.prevScoresByPid = {};
 
 function renderPresenterPlayers(players) {
   state.players = players; // Salva para re-render
   const container = $('pres-players');
   if (!players || players.length === 0) {
-    container.innerHTML = '<p style="color:#636e72;">Nenhum jogador conectado</p>';
+    container.innerHTML = '<p class="panel-empty">Nenhum jogador conectado</p>';
     return;
   }
 
-  const order = state.buzzerOrder || [];
-  
-  // Encontrar timestamp do primeiro jogador que buzinou (referência para delta)
-  let firstTs = null;
-  for (const o of order) {
-    if (o.timestamp) { firstTs = new Date(o.timestamp).getTime(); break; }
+  const ranked = players
+    .filter(p => p.role === 'player')
+    .sort((a, b) => (b.score_cache - a.score_cache) || a.name.localeCompare(b.name));
+
+  if (ranked.length === 0) {
+    container.innerHTML = '<p class="panel-empty">Nenhum jogador conectado</p>';
+    return;
   }
-  
-  // Criar lista enriquecida com info de buzina
-  const enrichedPlayers = players.filter(p => p.role === 'player').map(p => {
-    const buzzInfo = order.find(o => o.player_id === p.user_id);
-    let deltaStr = '';
-    if (buzzInfo?.timestamp && firstTs && buzzInfo.position > 1) {
-      const t = new Date(buzzInfo.timestamp).getTime();
-      const diff = (t - firstTs) / 1000;
-      deltaStr = `+${diff.toFixed(3)}s`;
-    }
-    return { ...p, buzzPos: buzzInfo?.position, deltaStr };
-  });
 
-  // Reordenar: quem buzinou primeiro no topo, depois por nome
-  enrichedPlayers.sort((a, b) => {
-    if (a.buzzPos && b.buzzPos) return a.buzzPos - b.buzzPos;
-    if (a.buzzPos) return -1;
-    if (b.buzzPos) return 1;
-    return a.name.localeCompare(b.name);
-  });
-
-  container.innerHTML = enrichedPlayers.map(p => {
-    const isBuzzed = !!p.buzzPos;
-    const isFirst = p.buzzPos === 1;
+  container.innerHTML = ranked.map(p => {
+    // Standard Competition Ranking: quem tem pontos estritamente maiores vem antes.
+    const rank = ranked.filter(other => other.score_cache > p.score_cache).length + 1;
+    const medal = ['🥇', '🥈', '🥉'][rank - 1] || rank + 'º';
+    const podiumCls = rank <= 3 ? ` podium-${rank}` : '';
     const online = p.online !== false;
-    const cls = `player-card ${isBuzzed ? 'is-buzzed' : ''} ${isFirst ? 'is-first-buzz' : ''} ${online ? '' : 'is-offline'}`;
-    const buzzHtml = isBuzzed ? `<span class="buzz-pos">${p.buzzPos}º</span>` : '';
-    const deltaHtml = p.deltaStr ? `<span class="buzz-delta">${p.deltaStr}</span>` : '';
+    const cls = `player-card${podiumCls}${online ? '' : ' is-offline'}`;
     const presenceHtml = `<span class="presence-dot ${online ? 'online' : 'offline'}" title="${online ? 'Online' : 'Offline'}" aria-label="${online ? 'Online' : 'Offline'}"></span>`;
     const codeHtml = p.player_code ? `<span class="player-code" title="Código interno do jogador">#${escapeHtml(p.player_code)}</span>` : '';
     const dupHtml = p.is_duplicate ? `<span class="badge-dup" title="Nome duplicado na sala">⚠️</span>` : '';
 
     return `
       <div class="${cls}" id="pp-${p.user_id}">
-        <div style="display:flex;align-items:center;min-width:0;">
+        <span class="rank-medal" title="${rank}º lugar">${medal}</span>
+        <div class="player-identity">
           ${presenceHtml}
-          ${buzzHtml}
           <span class="name">${escapeHtml(p.name)}</span>
           ${codeHtml}
           ${dupHtml}
-          ${deltaHtml}
         </div>
-        <div style="display:flex;align-items:center;gap:.75rem;">
+        <div class="player-score-actions">
           <span class="score" id="ps-${p.user_id}">${p.score_cache}</span>
-          <div class="score-actions">
-            <button class="btn-plus" onclick="changeScore('${p.user_id}', 3)">+3</button>
-            <button class="btn-plus" onclick="changeScore('${p.user_id}', 1)">+1</button>
-            <button class="btn-minus" onclick="changeScore('${p.user_id}', -2)">-2</button>
-          </div>
           <button class="btn-kick" onclick="handleRemovePlayer('${p.user_id}')" title="Remover jogador" aria-label="Remover jogador">✕</button>
         </div>
       </div>
@@ -80,18 +57,84 @@ function renderPresenterPlayers(players) {
 
 function renderPresenterScores(scores) {
   if (!scores) return;
+  let orderChanged = false;
+
   scores.forEach(s => {
+    const prev = state.prevScoresByPid[s.player_id];
+    if (prev === undefined) {
+      // Primeiro status: apenas semeia os valores, sem remover ninguém da ordem.
+      state.prevScoresByPid[s.player_id] = s.score;
+    } else if (prev !== s.score) {
+      state.prevScoresByPid[s.player_id] = s.score;
+      // Quem recebeu/teve pontos retirados sai da lista de ordem dos botões.
+      if (!state.judgedPlayers.has(s.player_id) &&
+          state.buzzerOrder.some(o => o.player_id === s.player_id)) {
+        state.judgedPlayers.add(s.player_id);
+        orderChanged = true;
+      }
+    }
+
     const el = $('ps-' + s.player_id);
     if (el) el.textContent = s.score;
     // Atualiza o cache local para evitar reversão no re-render (ex: próxima rodada)
     const p = state.players?.find(p => p.user_id === s.player_id);
     if (p) p.score_cache = s.score;
   });
+
+  if (orderChanged) renderBuzzerOrderList();
+  // Reordena o placar conforme os pontos.
+  if (state.players) renderPresenterPlayers(state.players);
 }
 
 function renderBuzzerOrder(order) {
-  // A ordem agora é renderizada dentro de renderPresenterPlayers usando o estado sincronizado
-  if (state.players) renderPresenterPlayers(state.players);
+  state.buzzerOrder = order || [];
+  renderBuzzerOrderList();
+  renderAnswers();
+}
+
+function renderBuzzerOrderList() {
+  const container = $('pres-buzzer-order');
+  if (!container) return;
+
+  const rawOrder = (state.buzzerOrder || []).slice().sort((a, b) => a.position - b.position);
+  const activeIds = new Set((state.players || []).filter(p => p.role === 'player').map(p => p.user_id));
+  const pending = rawOrder.filter(o =>
+    !state.judgedPlayers.has(o.player_id) &&
+    (activeIds.size === 0 || activeIds.has(o.player_id))
+  );
+
+  if (pending.length === 0) {
+    let message = 'Aguardando o início da rodada.';
+    if (rawOrder.length > 0) message = 'Todos os cliques já foram pontuados.';
+    else if (state.currentRoundId) message = 'Ninguém apertou o botão ainda.';
+    container.innerHTML = `<p class="panel-empty">${message}</p>`;
+    return;
+  }
+
+  const firstWithTs = rawOrder.find(o => o.timestamp);
+  const firstTs = firstWithTs ? new Date(firstWithTs.timestamp).getTime() : null;
+
+  container.innerHTML = pending.map((o, i) => {
+    let deltaHtml = '';
+    if (firstTs && o.timestamp) {
+      const diff = (new Date(o.timestamp).getTime() - firstTs) / 1000;
+      if (diff > 0.0005) deltaHtml = `<span class="buzz-time">+${diff.toFixed(3)}s</span>`;
+    }
+    // A posição é a ordem original do clique e não muda quando o jogador é pontuado.
+    const pos = o.position || i + 1;
+    return `
+      <div class="buzz-row${pos === 1 ? ' first' : ''}">
+        <span class="buzz-pos">${pos}º</span>
+        <span class="buzz-name">${escapeHtml(o.player_name || 'Jogador')}</span>
+        ${deltaHtml}
+        <div class="buzz-actions">
+          <button class="btn-plus" onclick="changeScore('${o.player_id}', 3)" title="+3 pontos">+3</button>
+          <button class="btn-plus" onclick="changeScore('${o.player_id}', 1)" title="+1 ponto">+1</button>
+          <button class="btn-minus" onclick="changeScore('${o.player_id}', -2)" title="-2 pontos">-2</button>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function renderAnswers() {
@@ -108,13 +151,19 @@ function renderAnswers() {
   Object.entries(state.answers).forEach(([pid, a]) => {
     if (!seen.has(pid)) sorted.push({ position: null, ...a });
   });
-  const items = sorted.map(a => `
-    <div class="player-card">
-      <span class="name">${a.position ? `<span style="color:#6c5ce7;">${a.position}º</span> ` : ''}${escapeHtml(a.player_name || '')}</span>
-      <span style="color:#fdcb6e;">${escapeHtml(a.text || '')}</span>
+
+  if (sorted.length === 0) {
+    container.innerHTML = '<p class="panel-empty">Nenhuma resposta ainda.</p>';
+    return;
+  }
+
+  container.innerHTML = sorted.map(a => `
+    <div class="answer-row">
+      <span class="answer-pos">${a.position ? a.position + 'º' : '—'}</span>
+      <span class="answer-name">${escapeHtml(a.player_name || '')}</span>
+      <span class="answer-text">${escapeHtml(a.text || '')}</span>
     </div>
   `).join('');
-  container.innerHTML = items || '<p style="color:#636e72;">Nenhuma resposta ainda</p>';
 }
 
 function updateRoundButton(isRoundActive) {
@@ -132,24 +181,26 @@ function updateRoundButton(isRoundActive) {
 
 function applyRoundSnapshot(round) {
   if (round) {
+    const sameRound = state.currentRoundId === round.id;
     state.currentRoundId = round.id;
     state.buzzerOrder = round.buzzer_order || [];
     state.answers = {};
     (round.answers || []).forEach(a => {
       state.answers[a.player_id] = { player_name: a.player_name, text: a.text };
     });
+    // Ao reconectar no meio da rodada, mantém quem já foi pontuado fora da ordem.
+    if (!sameRound) state.judgedPlayers.clear();
     $('pres-round-num').textContent = round.round_number;
     updateRoundButton(true);
     renderBuzzerOrder(state.buzzerOrder);
-    renderAnswers();
   } else {
     state.currentRoundId = null;
     state.buzzerOrder = [];
     state.answers = {};
+    state.judgedPlayers.clear();
     $('pres-round-num').textContent = '1';
     updateRoundButton(false);
     renderBuzzerOrder([]);
-    renderAnswers();
   }
 }
 
@@ -259,6 +310,11 @@ function extractYouTubeId(url) {
 
 function changeScore(playerId, delta) {
   if (!state.currentRoundId) return toast('Inicie uma rodada primeiro');
+  // Ao pontuar, o jogador sai imediatamente da lista de ordem dos botões.
+  if (state.buzzerOrder.some(o => o.player_id === playerId)) {
+    state.judgedPlayers.add(playerId);
+    renderBuzzerOrderList();
+  }
   state.socket.emit('pontos:alterar', {
     room_id: state.room.id,
     round_id: state.currentRoundId,
@@ -283,6 +339,8 @@ function handleRemovePlayer(userId) {
       toast((res && res.error) || 'Não foi possível remover o jogador');
       return;
     }
+    state.judgedPlayers.add(userId);
+    renderBuzzerOrderList();
     toast(`${player.name} removido da sala`);
   });
 }
@@ -318,8 +376,8 @@ function connectPresenterSocket() {
 
   state.socket.on('sala:status', (data) => {
     state.room = { ...state.room, ...data.room };
-    applyRoundSnapshot(data.current_round);
     renderPresenterPlayers(data.players);
+    applyRoundSnapshot(data.current_round);
     renderPresenterScores(data.scores);
   });
 
@@ -329,17 +387,16 @@ function connectPresenterSocket() {
     state.currentRoundId = data.round_id;
     state.answers = {};
     state.buzzerOrder = [];
+    state.judgedPlayers.clear();
     $('pres-round-num').textContent = data.round_number;
     updateRoundButton(true);
-    renderPresenterPlayers(state.players || []); // Forçar re-render para limpar buzinas
-    renderAnswers();
+    renderBuzzerOrder([]);
+    renderPresenterPlayers(state.players || []);
     showRoundGo();
   });
 
   state.socket.on('buzina:ordem', (data) => {
-    state.buzzerOrder = data.order;
-    renderBuzzerOrder(data.order);
-    renderAnswers();
+    renderBuzzerOrder(data.order || []);
   });
 
   state.socket.on('resposta:atualizada', (data) => {
@@ -353,9 +410,10 @@ function connectPresenterSocket() {
     state.currentRoundId = null;
     state.answers = {};
     state.buzzerOrder = [];
+    state.judgedPlayers.clear();
     updateRoundButton(false);
-    renderPresenterPlayers(state.players || []); // Limpar visuais de buzina
-    renderAnswers();
+    renderBuzzerOrder([]);
+    renderPresenterPlayers(state.players || []);
     
     // Inicia a próxima rodada automaticamente após o encerramento da anterior
     setTimeout(() => handleStartRound(), 500);
@@ -365,18 +423,22 @@ function connectPresenterSocket() {
 }
 
 // ─── Init ─────────────────────────────────────────
-setupAuth()
-  .then(() => requireRoom(getRoomCodeFromUrl()))
-  .then(room => {
-    if (room.presenter_id !== state.user.id) {
-      location.href = '/jogador?sala=' + room.code;
-      return;
-    }
-    $('pres-code').textContent = room.code;
-    const roomTitle = room.title || 'Quiz Show';
-    $('pres-title').textContent = roomTitle;
-    $('pres-round-room-title').textContent = roomTitle;
-    document.title = roomTitle + ' — Apresentador';
-    connectPresenterSocket();
-  })
-  .catch(() => { /* redirect já feito por setupAuth/requireRoom */ });
+if (window.__PRESENTER_DEMO__) {
+  // O modo de exemplo é inicializado por /js/apresentador-demo.js.
+} else {
+  setupAuth()
+    .then(() => requireRoom(getRoomCodeFromUrl()))
+    .then(room => {
+      if (room.presenter_id !== state.user.id) {
+        location.href = '/jogador?sala=' + room.code;
+        return;
+      }
+      $('pres-code').textContent = room.code;
+      const roomTitle = room.title || 'Quiz Show';
+      $('pres-title').textContent = roomTitle;
+      $('pres-round-room-title').textContent = roomTitle;
+      document.title = roomTitle + ' — Apresentador';
+      connectPresenterSocket();
+    })
+    .catch(() => { /* redirect já feito por setupAuth/requireRoom */ });
+}
