@@ -9,7 +9,7 @@ import { setupSocketEvents } from './ws/events.js';
 import { cleanupInactiveRooms } from './store/queries.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.PORT) || 7000;
+const PORT = Number(process.env.PORT) || 9000;
 
 const app = express();
 const httpServer = createServer(app);

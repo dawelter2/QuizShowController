@@ -1,6 +1,14 @@
 # Quiz Show Controller
 
+[![Site Online](https://img.shields.io/badge/site-online-2ea44f)](https://quizshowcontroller.onrender.com/)
+
 Sistema web para controle de quiz/show de perguntas e respostas com suporte a múltiplos jogadores, sistema de buzzer, temporizador e integração com OBS para transmissão ao vivo.
+
+## Site Online
+
+O site está hospedado em: **https://quizshowcontroller.onrender.com/**
+
+Acesse pelo navegador — não é necessário instalar nada. Para usar como fonte no OBS, basta apontar o *Browser Source* para essa mesma URL.
 
 ## Funcionalidades
 
@@ -18,7 +26,9 @@ Sistema web para controle de quiz/show de perguntas e respostas com suporte a m�
 quiz-show-controller/
 ├── docs/               # Documentação do projeto
 ├── src/                # Código fonte
-├── public/             # Assets estáticos
+│   └── public/         # Assets estáticos (HTML/CSS/JS servidos pelo Express)
+├── tests/              # Testes automatizados
+├── Dockerfile          # Build de produção (opcional)
 └── README.md
 ```
 
@@ -34,6 +44,9 @@ quiz-show-controller/
 | OBS         | Browser Source (HTML + CSS)    |
 
 ## Primeiros Passos
+
+> Já quer usar sem instalar nada? Acesse a versão online em **https://quizshowcontroller.onrender.com/**.
+> As instruções abaixo são para rodar o projeto localmente (desenvolvimento).
 
 ```bash
 # Clone o repositório
@@ -53,6 +66,39 @@ npm run dev
 # Compila o TypeScript e roda os testes de identidade/presença dos jogadores
 npm test
 ```
+
+## Deploy
+
+O projeto está publicado em **https://quizshowcontroller.onrender.com/**, hospedado no [Render](https://render.com/) como serviço Node.js.
+
+### Configuração do serviço
+
+| Item          | Valor                  |
+|---------------|------------------------|
+| Runtime       | Node.js 20+            |
+| Build Command | `npm install && npm run build` |
+| Start Command | `npm start`            |
+| Porta         | Definida pelo Render via variável `PORT` (localmente: `9000`) |
+
+### Publicar uma nova versão
+
+1. Faça commit e push para o branch conectado ao serviço no Render.
+2. O Render executa o build e reinicia a aplicação automaticamente.
+3. Confira o resultado em https://quizshowcontroller.onrender.com/.
+
+### Rodar como container (opcional)
+
+O repositório inclui um `Dockerfile` multi-stage pronto para produção:
+
+```bash
+docker build -t quiz-show-controller .
+docker run -p 9000:9000 quiz-show-controller
+```
+
+### Observações
+
+- O estado do jogo (salas, rodadas, buzzers) fica **em memória**: reiniciar o serviço encerra as salas ativas.
+- Se o serviço estiver no plano gratuito do Render, ele hiberna após um período sem acessos — a primeira requisição pode levar alguns segundos até "acordar".
 
 ## Licença
 
