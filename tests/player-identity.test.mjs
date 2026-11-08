@@ -7,7 +7,6 @@ import {
   updateScoreCache, removePlayerFromRoom, kickPlayerFromRoom,
   resetRoomGame, renameUser, isNameTakenInRoom,
   normalizePlayerName, sanitizePlayerName,
-  createRound, upsertAnswer, getRoundAnswers,
 } from '../dist/store/queries.js';
 
 let counter = 0;
@@ -135,18 +134,14 @@ test('sair e voltar com a mesma sessão mantém uma entrada e o score', () => {
   assert.equal(players[0].score_cache, 5);
 });
 
-test('remoção tira do placar, apaga respostas e bloqueia a mesma sessão', () => {
+test('remoção tira do placar e bloqueia a mesma sessão', () => {
   const room = makeRoom();
   const user = makeUser('Ana');
   joinRoomAsPlayer(room.id, user.id);
 
-  const round = createRound(room.id, 1, '', '');
-  upsertAnswer(round.id, user.id, 'resposta');
-
   const kick = kickPlayerFromRoom(room.id, user.id);
   assert.equal(kick.ok, true);
   assert.equal(activePlayers(room.id).length, 0);
-  assert.equal(getRoundAnswers(round.id).length, 0);
 
   const rejoin = joinRoomAsPlayer(room.id, user.id);
   assert.equal(rejoin.ok, false);

@@ -81,7 +81,6 @@
   .panel-hint { font-size: .68rem; color: #636e72; white-space: nowrap; }
   .panel-body { min-height: 0; }
   .panel-order .panel-body { max-height: 26vh; overflow-y: auto; }
-  .panel-answers .panel-body { max-height: 16vh; overflow-y: auto; }
   .panel-score .panel-body { max-height: 48vh; overflow-y: auto; }
   .panel-score { margin-top: auto; }
   .panel-empty { margin: 0; color: #636e72; font-size: .82rem; padding: .35rem 0; }
@@ -102,12 +101,6 @@
   .content.layout-video .buzz-actions button { min-width: 24px; height: 23px; font-size: .58rem; padding: 0 .2rem; }
   @keyframes buzzIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes goldPulse { 0%,100% { box-shadow: 0 0 8px rgba(253,203,110,.4); } 50% { box-shadow: 0 0 22px rgba(253,203,110,.95); } }
-
-  .answer-row { display: flex; align-items: baseline; gap: .4rem; padding: .32rem .1rem; border-bottom: 1px solid rgba(42,42,62,.7); font-size: .84rem; }
-  .answer-row:last-child { border-bottom: none; }
-  .answer-pos { min-width: 24px; color: #6c5ce7; font-size: .72rem; font-weight: 800; }
-  .answer-name { color: #e0e0e0; font-weight: 700; white-space: nowrap; }
-  .answer-text { color: #fdcb6e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .round-go { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 1000; opacity: 0; }
   .round-go .go-text { font-size: clamp(6rem, 22vw, 14rem); font-weight: 900; color: #fdcb6e; text-shadow: 0 0 40px rgba(253,203,110,.9), 0 0 80px rgba(253,203,110,.4); transform: scale(.3); letter-spacing: .05em; }
@@ -198,10 +191,8 @@
   .content.layout-video .content-right > * { max-width: 100%; }
   .content.layout-video .panel { display: flex; flex-direction: column; min-height: 0; padding: .55rem .65rem; }
   .content.layout-video .panel-order { flex: 0 1 27%; min-height: 100px; }
-  .content.layout-video .panel-answers { flex: 0 1 10%; min-height: 64px; }
   .content.layout-video .panel-score { flex: 1 1 auto; min-height: 150px; margin-top: 0; }
   .content.layout-video .panel-order .panel-body,
-  .content.layout-video .panel-answers .panel-body,
   .content.layout-video .panel-score .panel-body { flex: 1 1 auto; max-height: none; overflow-y: auto; }
 
   .video-panel .video-close-btn {
@@ -277,13 +268,6 @@
         <span class="panel-hint">cliques da rodada</span>
       </div>
       <div class="panel-body" id="pres-buzzer-order"></div>
-    </section>
-
-    <section class="panel panel-answers" aria-labelledby="pres-answers-title">
-      <div class="panel-head">
-        <h3 id="pres-answers-title">✍️ Respostas</h3>
-      </div>
-      <div class="panel-body" id="pres-answers"></div>
     </section>
 
     <section class="panel panel-score" aria-labelledby="pres-score-title">

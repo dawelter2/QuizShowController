@@ -28,21 +28,12 @@
     { player_id: 'p05', player_name: 'Eva',   position: 5, timestamp: new Date(baseTs + 2100).toISOString() },
   ];
 
-  const demoAnswers = {
-    p01: { player_name: 'Ana',   text: 'Coringa' },
-    p02: { player_name: 'Bob',   text: 'Joker' },
-    p03: { player_name: 'Carol', text: 'Batman' },
-    p04: { player_name: 'David', text: 'Coringa (2019)' },
-    p05: { player_name: 'Eva',   text: 'O Cavaleiro das Trevas' },
-  };
-
   state.previewMode = true;
   state.room = { id: 'demo-room', code: 'DEMO', title: 'CineQuiz — Exemplo' };
   state.user = { id: 'demo-host', name: 'Mestre' };
   state.players = demoPlayers;
   state.currentRoundId = 'demo-round-' + DEMO_ROUND;
   state.buzzerOrder = demoBuzzes;
-  state.answers = demoAnswers;
   state.autoNextRound = false;
   state.judgedPlayers = new Set();
   state.prevScoresByPid = {};
@@ -82,7 +73,6 @@
   function startDemoRound() {
     state.currentRoundId = 'demo-round-' + Date.now();
     state.buzzerOrder = [];
-    state.answers = {};
     state.judgedPlayers.clear();
     const current = parseInt($('pres-round-num').textContent, 10) || 1;
     $('pres-round-num').textContent = String(current + 1);
@@ -138,7 +128,6 @@
     state.prevScoresByPid = {};
     state.players.forEach(p => { state.prevScoresByPid[p.user_id] = 0; });
     state.buzzerOrder = [];
-    state.answers = {};
     state.judgedPlayers.clear();
     state.currentRoundId = 'demo-round-1';
     $('pres-round-num').textContent = '1';
@@ -150,5 +139,4 @@
 
   renderPresenterPlayers(state.players);
   renderBuzzerOrder(state.buzzerOrder);
-  renderAnswers();
 })();
