@@ -3,6 +3,8 @@
 [![Site Online](https://img.shields.io/badge/site-online-2ea44f)](https://quizshowcontroller.onrender.com/)
 
 Sistema web para controle de quiz/show de perguntas e respostas com suporte a múltiplos jogadores, sistema de buzzer, temporizador e integração com OBS para transmissão ao vivo.
+<img width="1883" height="834" alt="image" src="https://github.com/user-attachments/assets/2394e897-2d72-4f9a-88fb-24179d56e996" />
+
 
 ## Site Online
 
