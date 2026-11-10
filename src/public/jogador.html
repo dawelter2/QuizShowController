@@ -19,6 +19,7 @@
   .buzzer-active { background: #d63031; color: #fff; box-shadow: 0 0 40px rgba(214,48,49,.5); animation: pulse 1s infinite; }
   .buzzer-pressed { background: #fdcb6e; color: #1a1a2e; }
   .buzzer-disabled { background: #2d2d2d; color: #636e72; }
+  .buzzer-punished { background: #3a1a1a; color: #ff7675; box-shadow: inset 0 0 0 4px rgba(214,48,49,.35); cursor: not-allowed; }
   .buzzer-activated { animation: activateBounce .45s ease-out, pulse 1s infinite .45s; }
   .first-buzz { box-shadow: 0 0 0 4px #fdcb6e, 0 0 30px rgba(253,203,110,.9) !important; animation: goldPulse 1.2s ease-in-out infinite !important; }
 
@@ -73,6 +74,9 @@
   .badge-outline { background: #16162a; border: 1px solid #2a2a3e; color: #a0a0b8; }
   .badge-primary { background: #6c5ce7; color: #fff; box-shadow: 0 2px 8px rgba(108,92,231,.3); }
 
+  .penalty-banner { display: flex; align-items: center; justify-content: center; gap: .5rem; width: 100%; max-width: 300px; margin-bottom: 1rem; padding: .65rem .9rem; border-radius: 8px; background: rgba(214,48,49,.14); border: 1px solid rgba(214,48,49,.55); color: #ff7878; font-size: .88rem; font-weight: 700; line-height: 1.3; text-align: center; }
+  .penalty-banner.hidden { display: none; }
+
   /* ─── Placar Overlay ─── */
   .btn-placar { position: fixed; top: 62px; right: 0.75rem; z-index: 2500; padding: 0.4rem 1rem; border-radius: 20px; border: 1px solid #2a2a3e; background: #1a1a2e; color: #a0a0b8; font-size: 0.8rem; font-weight: 700; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; touch-action: manipulation; transition: all .15s; }
   .btn-placar:active { background: #2a2a3e; color: #fdcb6e; border-color: #fdcb6e; }
@@ -88,8 +92,10 @@
   .placar-row[data-pos="1"]:not(.empty) .placar-pos { font-size: 1.3rem; }
   .placar-row[data-pos="2"]:not(.empty) .placar-pos { font-size: 1.3rem; }
   .placar-row[data-pos="3"]:not(.empty) .placar-pos { font-size: 1.3rem; }
-  .placar-name { font-weight: 600; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .placar-name { display: flex; align-items: center; gap: 0.3rem; font-weight: 600; font-size: 0.95rem; overflow: hidden; white-space: nowrap; }
+  .placar-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .placar-score { text-align: right; font-weight: 800; font-size: 1.15rem; color: #fdcb6e; font-variant-numeric: tabular-nums; }
+  .placar-penalty { margin-left: .35rem; padding: .05rem .3rem; border-radius: 999px; background: rgba(214,48,49,.2); border: 1px solid rgba(214,48,49,.5); color: #ff7875; font-size: .68rem; font-weight: 800; white-space: nowrap; }
   .placar-row.is-me { background: rgba(108,92,231,0.12); border-bottom-color: transparent; }
   .placar-row.is-me .placar-name { color: #a29bfe; }
   .placar-row.is-me + .placar-bar-row { background: rgba(108,92,231,0.12); }
@@ -134,6 +140,10 @@
   <div class="status-bar">
     <span class="badge badge-outline" id="player-status-room-title"></span>
     <span class="badge badge-primary">Rodada <span id="player-status-round-num">1</span></span>
+  </div>
+  <div class="penalty-banner hidden" id="player-penalty">
+    <span>🚫</span>
+    <span id="player-penalty-text"></span>
   </div>
   <div class="score-card" id="player-score-card">
     <div class="name">Seus Pontos</div>

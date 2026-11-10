@@ -14,7 +14,7 @@
 |-----------------------|--------|----------------------------------------------|
 | Na mosca 🎯           |  +3    | Resposta exata e rápida                      |
 | Raspando 🫣           |  +1    | Acertou o filme mas com hesitação/quase      |
-| Errou buzina 🚨       |  -2    | Apertou primeiro e errou (punição)           |
+| Errou buzina 🚨       | 3 rodadas sem buzinar | Apertou e errou; não perde pontos e fica sem buzinar em R+1, R+2 e R+3 |
 | Não respondeu         |   0    | Não apertou buzina ou não escreveu nada      |
 
 > *Nota: o apresentador decide se foi "na mosca" ou "raspando" baseado na resposta e no tempo.*
@@ -80,16 +80,17 @@ Mestre clica "COMEÇAR RODADA"
 Mestre julga:
   🎯 Bob → "Coringa" — resposta certa, na mosca → +3 pts → Bob: 3
   🎯 Ana → "Joker" — nome original, na mosca → +3 pts → Ana: 3
-  🚨 Carol → "Batman" — errado e apertou buzina → -2 pts → Carol: -2
+  🚨 Carol → "Batman" — errado e apertou buzina → punida por 3 rodadas
+     (R2, R3 e R4), sem perder pontos → Carol: 0
 ```
 
 **OBS atualiza:**
 ```
   ┌────────┐ ┌────────┐ ┌────────┐
   │  Ana   │ │  Bob   │ │ Carol  │
-  │ 🟢 3   │ │ 🟢 3   │ │ 🔴 -2  │
+  │ 🟢 3   │ │ 🟢 3   │ │ 🚫 0   │
   └────────┘ └────────┘ └────────┘
-  🏆 1. Bob 3 | 2. Ana 3 | 3. Carol -2
+  🏆 1. Bob 3 | 2. Ana 3 | 3. Carol 0
 ```
 
 ---
@@ -103,28 +104,27 @@ Mestre julga:
 
   Ana buzina! (0.5s)    → Ana: 1º 🥇
   Bob buzina! (1.0s)    → Bob: 2º
-  Carol buzina! (1.3s)  → Carol: 3º
+  🚫 Carol está punida e não pode buzinar.
 
 --- Jogadores digitam ---
   Ana:   "John Wick"
   Bob:   "Matrix"
-  Carol: "John Wick 2"
 
 --- 5s: Vídeo revela → "JOHN WICK" ---
 
 Mestre julga:
   🎯 Ana → "John Wick" — na mosca, rápida → +3 pts → Ana: 6
-  🚨 Bob → "Matrix" — errou e apertou buzina → -2 pts → Bob: 1
-  🫣 Carol → "John Wick 2" — certa a franquia, mas errou o filme, raspando → +1 pt → Carol: -1
+  🚨 Bob → "Matrix" — errou e apertou buzina → punido por 3 rodadas
+     (R3, R4 e R5), sem perder pontos → Bob: 3
 ```
 
 **OBS atualiza:**
 ```
   ┌────────┐ ┌────────┐ ┌────────┐
   │  Ana   │ │  Bob   │ │ Carol  │
-  │ 🟢 6   │ │ 🟡 1   │ │ 🔴 -1  │
+  │ 🟢 6   │ │ 🚫 3   │ │ 🚫 0   │
   └────────┘ └────────┘ └────────┘
-  🏆 1. Ana 6 | 2. Bob 1 | 3. Carol -1
+  🏆 1. Ana 6 | 2. Bob 3 | 3. Carol 0
 ```
 
 ---
@@ -136,21 +136,21 @@ Mestre julga:
 ```
 --- 0s: Frame aparece ---
 
-  ninguém buzina... ⏳
-  ninguém buzina... ⏳
+  Ana buzina! (1.0s) → Ana: 1º 🥇
+  🚫 Bob e Carol estão punidos e não podem buzinar.
+
+--- Jogadores digitam ---
+  Ana: "Titanic"
 
 --- 5s: Vídeo revela → "TITANIC" ---
 
-  Ninguém apertou a buzina!
-  → Todos: 0 pts
-
-Mestre: "Gente, TITANIC! Era muito fácil!" 😂
+Mestre julga:
+  🎯 Ana → "Titanic" — na mosca → +3 pts → Ana: 9
 ```
 
 **OBS atualiza:**
 ```
-  🏆 1. Ana 6 | 2. Bob 1 | 3. Carol -1
-  (sem alterações)
+  🏆 1. Ana 9 | 2. Bob 3 | 3. Carol 0
 ```
 
 ---
@@ -163,26 +163,21 @@ Mestre: "Gente, TITANIC! Era muito fácil!" 😂
 ```
 --- 0s: Frame aparece ---
 
-  Carol buzina! (1.1s)  → Carol: 1º 🥇
-  Bob buzina! (2.0s)    → Bob: 2º
-  Ana buzina! (2.5s)    → Ana: 3º
+  Ana buzina! (1.1s) → Ana: 1º 🥇
+  🚫 Bob e Carol continuam punidos e não podem buzinar.
 
 --- Jogadores digitam ---
-  Carol: "Velozes e Furiosos 2"
-  Bob:   "Fast and Furious 2"
-  Ana:   "Velozes e Furiosos"
+  Ana: "Velozes e Furiosos 2"
 
---- 5s: Vídeo revela → "VELOZES E FURISOS 2" ---
+--- 5s: Vídeo revela → "VELOZES E FURIOSOS 2" ---
 
 Mestre julga:
-  🎯 Carol → "Velozes e Furiosos 2" — na mosca! → +3 pts → Carol: 2
-  🎯 Bob → "Fast and Furious 2" — na mosca (inglês vale) → +3 pts → Bob: 4
-  🫣 Ana → "Velozes e Furiosos" — raspando (sem o 2) → +1 pt → Ana: 7
+  🎯 Ana → "Velozes e Furiosos 2" — na mosca! → +3 pts → Ana: 12
 ```
 
 **OBS atualiza:**
 ```
-  🏆 1. Ana 7 | 2. Bob 4 | 3. Carol 2
+  🏆 1. Ana 12 | 2. Bob 3 | 3. Carol 0
 ```
 
 ---
@@ -194,21 +189,19 @@ Mestre julga:
 ```
 --- 0s: Frame aparece ---
 
-  Ana buzina! (0.3s) ← muito rápida!
-  Bob buzina! (0.6s)
-  Carol buzina! (0.8s)
+  Carol buzina! (0.8s) ← voltou da punição! → Carol: 1º 🥇
+  Ana buzina! (1.2s)   → Ana: 2º
+  🚫 Bob ainda está punido (última rodada) e não buzz.
 
 --- Jogadores digitam ---
+  Carol: "It - Capítulo 1"
   Ana:   "It - A Coisa"
-  Bob:   "It - Capítulo 1"
-  Carol: "Palhaço Assassino" ← não é o nome oficial
 
 --- 5s: Vídeo revela → "IT - A COISA" ---
 
 Mestre julga:
-  🎯 Ana → "It - A Coisa" — na mosca, ultra rápida → +3 pts → Ana: 10
-  🫣 Bob → "It - Capítulo 1" — raspando (título correto é só "It" ou "It - A Coisa") → +1 pt → Bob: 5
-  🚨 Carol → "Palhaço Assassino" — errado e apertou buzina → -2 pts → Carol: 0
+  🎯 Ana → "It - A Coisa" — na mosca, ultra rápida → +3 pts → Ana: 15
+  🫣 Carol → "It - Capítulo 1" — raspando (título correto é só "It" ou "It - A Coisa") → +1 pt → Carol: 1
 ```
 
 ---
@@ -216,15 +209,15 @@ Mestre julga:
 ## Placar Final
 
 ```
-┌─────────────────────────────────────────────┐
-│         🏆 CineQuiz — PLACAR FINAL           │
-├──────────┬──────────┬────────────────────────┤
-│ Jogador  │ Pontos   │ Detalhamento           │
-├──────────┼──────────┼────────────────────────┤
-│ 🥇 Ana  │   10     │ R1:+3 R2:+3 R4:+1 R5:+3 │
-│ 🥈 Bob  │    5     │ R1:+3 R2:-2 R4:+3 R5:+1 │
-│ 🥉 Carol │    0     │ R1:-2 R2:+1 R4:+3 R5:-2 │
-└──────────┴──────────┴────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│           🏆 CineQuiz — PLACAR FINAL                 │
+├──────────┬──────────┬────────────────────────────────┤
+│ Jogador  │ Pontos   │ Detalhamento                   │
+├──────────┼──────────┼────────────────────────────────┤
+│ 🥇 Ana  │   15     │ R1:+3 R2:+3 R3:+3 R4:+3 R5:+3 │
+│ 🥈 Bob  │    3     │ R1:+3 (R2 errou: punido R3-R5)│
+│ 🥉 Carol │    1     │ R1 errou: punida R2-R4; R5:+1 │
+└──────────┴──────────┴────────────────────────────────┘
 ```
 
 ---
@@ -276,3 +269,4 @@ Mestre julga:
 | Acertou (na mosca) | `🎯` | Verde brilhante |
 | Acertou (raspando) | `🫣` | Laranja |
 | Errou | `🚨` | Vermelho piscando |
+| Punido (sem buzinar) | `🚫` + contador | Vermelho |

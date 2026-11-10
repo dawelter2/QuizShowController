@@ -38,7 +38,9 @@
   #widget-ranking .rank-trend.down { color: #d63031; }
   #widget-ranking .rank-pos { display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   #widget-ranking .rank-main { min-width: 0; }
-  #widget-ranking .rank-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #widget-ranking .rank-name { display: flex; align-items: center; gap: .35rem; overflow: hidden; white-space: nowrap; }
+  #widget-ranking .rank-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #widget-ranking .rank-penalty { flex-shrink: 0; padding: .04rem .35rem; border-radius: 999px; background: rgba(214,48,49,.25); border: 1px solid rgba(214,48,49,.6); color: #ff7878; font-size: .68rem; font-weight: 800; white-space: nowrap; }
   #widget-ranking .rank-score { position: relative; min-width: 70px; text-align: right; font-variant-numeric: tabular-nums; }
   #widget-ranking .rank-score-value { display: inline-block; }
   #widget-ranking .rank-delta { position: absolute; top: -.7rem; right: 0; font-size: .65rem; font-weight: 800; padding: .08rem .35rem; border-radius: 6px; animation: deltaPop .4s ease-out; pointer-events: none; line-height: 1.2; }
@@ -49,6 +51,7 @@
   #widget-ranking .rank-buzzer.neutral .bz { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); color: rgba(255,255,255,.25); }
   #widget-ranking .rank-buzzer.armed .bz { background: #ff4444; border: 1px solid #ff7878; color: #fff; animation: armedPulse 1.2s ease-out infinite; }
   #widget-ranking .rank-buzzer.buzzed .bz { background: #00b894; border: 1px solid #00d4a8; color: #08130f; box-shadow: 0 0 14px rgba(0,184,148,.7); }
+  #widget-ranking .rank-buzzer.punished .bz { background: rgba(214,48,49,.22); border: 1px solid #d63031; color: #ff7878; }
 
   /* Empty-slot: placeholder com mesma altura */
   #widget-ranking .rank-row.empty-slot { opacity: .35; }
@@ -354,6 +357,12 @@
         deltaHtml = '<span class="rank-delta '+dcls+'">'+sign+delta+'</span>';
       }
 
+      // Punição por erro: 3 rodadas sem buzinar, sem alterar pontos.
+      var penalty = s.penalty;
+      var penaltyHtml = penalty
+        ? '<span class="rank-penalty" title="Punido: '+penalty.rounds_remaining+' rodada(s) sem buzinar">🚫 '+penalty.rounds_remaining+'</span>'
+        : '';
+
       // Delta de tempo (buzzer)
       var timeDeltaHtml = '';
       var bzPos = buzzedOrderByPid[s.player_id];
@@ -370,6 +379,9 @@
       if (bzPos) {
         bzClass = 'buzzed';
         bzContent = bzPos + 'º';
+      } else if (penalty && penalty.active) {
+        bzClass = 'punished';
+        bzContent = '🚫';
       } else if (currentRoundActive) {
         bzClass = 'armed';
       }
@@ -378,7 +390,7 @@
       html += '<div class="rank-row'+firstCls+'" data-pid="'+esc(s.player_id)+'" data-pos="'+pos+'">'
         + trendHtml
         + '<div class="rank-pos">' + posText + '</div>'
-        + '<div class="rank-main"><div class="rank-name">' + esc(s.player_name) + '</div><div class="rank-bar"><div class="rank-bar-fill" style="width:'+pct+'%"></div></div></div>'
+        + '<div class="rank-main"><div class="rank-name"><span class="rank-name-text">' + esc(s.player_name) + '</span>' + penaltyHtml + '</div><div class="rank-bar"><div class="rank-bar-fill" style="width:'+pct+'%"></div></div></div>'
         + '<div class="rank-delta-time-cell">' + timeDeltaHtml + '</div>'
         + '<div class="rank-score"><span class="rank-score-value" data-pid="'+esc(s.player_id)+'" data-from="'+initialScore+'" data-to="'+s.score+'">' + initialScore + '</span>' + deltaHtml + '</div>'
         + buzzerHtml

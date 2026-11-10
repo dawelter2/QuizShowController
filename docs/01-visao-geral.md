@@ -18,7 +18,7 @@ Entrada simples com nome (sem senha). Após entrar, o usuário escolhe entre **C
 ### Apresentador
 - Gera um código único para a sala
 - Botões: **Começar Rodada**, **Próxima Rodada**
-- Pode **adicionar ou remover pontos** de cada jogador individualmente
+- Pode **somar pontos** (+3/+1) de cada jogador e **aplicar a punição de erro** (3 rodadas sem buzinar)
 
 ### Jogador
 - Acessa a sala pelo código gerado
@@ -38,5 +38,5 @@ Entrada simples com nome (sem senha). Após entrar, o usuário escolhe entre **C
 3. Apresentador inicia a rodada — buzinas são liberadas
 4. Jogadores apertam buzina e escrevem a resposta
 5. Ordem dos buzzes é registrada e exibida
-6. Apresentador atribui/remove pontos de cada jogador
+6. Apresentador pontua os acertos e aplica a punição de 3 rodadas a quem errou
 7. Apresentador avança para a próxima rodada — campos de resposta limpam, score continua

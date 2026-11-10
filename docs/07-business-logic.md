@@ -45,13 +45,13 @@
 [Apresentador vê ordem das buzinas e respostas em tempo real]
        |
        v
-[Apresentador pontua manualmente cada jogador]
+[Apresentador pontua (+3/+1) ou aplica a punição de erro]
        |
        v
 [Apresentador clica "Próxima Rodada"]
        |
        v
-[Servidor: limpa buzinas e respostas, SCORE PERMANECE]
+[Servidor: limpa buzinas e respostas, SCORE PERMANECE, punições avançam]
 ```
 
 ### Regras da Rodada
@@ -60,16 +60,18 @@
 - **Ordem**: definida pelo timestamp do servidor no momento do clique.
 - **Campo de texto**: o jogador pode editar sua resposta **enquanto a rodada estiver ativa**.
 - **Respostas vazias**: se o jogador apertou a buzina mas não escreveu nada, o apresentador vê o campo vazio.
+- **Punição**: quem erra fica **3 rodadas sem poder buzinar** (R+1, R+2 e R+3 após o erro).
 
 ## 4. Pontuação
 
 - Score é **acumulativo** entre rodadas
-- O apresentador controla **manualmente**:
-  - Botões de atalho: `+1`, `+2`, `+5`, `-1`, `-2`, `-5`
-  - (Ou campo personalizado para digitar valor)
-- Não há regra automática de certo/errado — o apresentador decide quanto dar
+- O apresentador controla os acertos:
+  - Botões de atalho: `+3` (na mosca) e `+1` (raspando)
+  - Erro: botão **Errou**, que aplica **3 rodadas de punição** em vez de retirar pontos
+- A punição não acumula: se o jogador já está punido, uma nova punição é ignorada
+- O contador da punição diminui a cada rodada (3 → 2 → 1) e libera a buzina depois da terceira
 - Score inicial de cada jogador = 0
-- Score nunca reseta, a menos que o apresentador recrie a sala
+- Score nunca reseta, a menos que o apresentador reinicie a partida
 
 ## 5. Transmissão (OBS)
 
@@ -90,12 +92,15 @@ A tela de transmissão reflete o estado atual:
 | Respostas escritas | ✅ Sim |           |
 | Score dos jogadores|        | ✅ Sim   |
 | Jogadores na sala  |        | ✅ Sim   |
+| Punições           | ➖ 1 rodada por vez | ✅ Até cumprir as 3 |
 
 ## 7. Casos de Borda
 
 | Situação                              | Comportamento                                      |
 |---------------------------------------|----------------------------------------------------|
 | Jogador apertou buzina 2x na rodada  | Segundo clique ignorado                            |
+| Jogador punido tenta buzinar         | Servidor recusa (`PUNIDO`); buzina desabilitada    |
+| Jogador punido termina a punição     | Volta a poder buzinar na rodada seguinte           |
 | Jogador entrou no meio da rodada     | Buzina e resposta bloqueados até a próxima rodada  |
 | Apresentador fecha o navegador       | Sala permanece em memória até a limpeza de inativas |
 | Jogador fecha a aba / perde conexão  | Fica **offline** na lista (não é removido)          |

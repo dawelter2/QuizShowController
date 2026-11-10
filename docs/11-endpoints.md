@@ -197,7 +197,7 @@ GET /api/rooms/:id/rounds/:roundId → Detalhes de uma rodada
     ],
     "answers": [
       { "player": "Ana", "text": "Titanic", "judgment": "na_mosca", "score_delta": 3 },
-      { "player": "Bob", "text": "O Barco", "judgment": "errado", "score_delta": -2 }
+      { "player": "Bob", "text": "O Barco", "judgment": "errado", "score_delta": 0, "penalty_rounds": 3 }
     ]
   }
 }
@@ -252,7 +252,10 @@ Apresentador libera buzinas e inicia nova rodada.
   "data": {
     "round_id": "uuid",
     "round_number": 1,
-    "media_url": "https://youtube.com/..."
+    "media_url": "https://youtube.com/...",
+    "punishments": [
+      { "player_id": "uuid", "rounds_remaining": 3 }
+    ]
   }
 }
 ```
@@ -271,6 +274,7 @@ Jogador apertou a buzina.
 ```
 
 **Servidor valida:**
+- Jogador está punido? → emite `erro` com `code: "PUNIDO"` e não registra o clique
 - Jogador já apertou nesta rodada? → **ignora** (não emite nada)
 - Primeira vez → registra posição e emite `buzina:ordem`
 
@@ -326,24 +330,23 @@ Jogador digitou/modificou a resposta (em tempo real enquanto digita, ou ao subme
 
 #### `pontos:alterar`
 
-Apresentador altera pontos de um jogador.
+Apresentador soma pontos de um acerto (`+3` na mosca / `+1` raspando).
 
 ```json
 {
   "event": "pontos:alterar",
   "data": {
+    "room_id": "uuid",
     "round_id": "uuid",
     "player_id": "uuid",
-    "score_delta": 3,
-    "judgment": "na_mosca"
+    "score_delta": 3
   }
 }
 ```
 
 **Servidor:**
-1. Atualiza `answers` com `judgment` e `score_delta`
-2. Atualiza `score_cache` do jogador na sala
-3. Emite `placar:atualizado` para **todos**
+1. Atualiza o `score_cache` do jogador na sala
+2. Emite `placar:atualizado` para **todos**
 
 ```json
 {
@@ -351,13 +354,50 @@ Apresentador altera pontos de um jogador.
   "data": {
     "room_id": "uuid",
     "scores": [
-      { "player_id": "uuid", "player_name": "Ana", "score": 10 },
-      { "player_id": "uuid", "player_name": "Bob", "score": 5 },
-      { "player_id": "uuid", "player_name": "Carol", "score": 0 }
+      { "player_id": "uuid", "player_name": "Ana", "score": 10, "penalty": null },
+      { "player_id": "uuid", "player_name": "Bob", "score": 5, "penalty": { "active": true, "starts_next_round": false, "rounds_remaining": 2, "start_round": 3, "until_round": 4 } },
+      { "player_id": "uuid", "player_name": "Carol", "score": 0, "penalty": null }
     ]
   }
 }
 ```
+
+---
+
+#### `jogador:punir`
+
+Apresentador aplica a punição de **3 rodadas sem buzinar** (não altera pontos).
+
+```json
+{
+  "event": "jogador:punir",
+  "data": { "room_id": "uuid", "player_id": "uuid", "round_id": "uuid" }
+}
+```
+
+**Servidor:**
+1. Valida que o socket pertence ao `presenter_id`, que existe rodada ativa e que o
+   jogador apertou a buzina nesta rodada.
+2. Define `penalty_start_round = R+1` e `penalty_until_round = R+3`.
+3. Emite `jogador:punido` para todos:
+
+```json
+{
+  "event": "jogador:punido",
+  "data": {
+    "player_id": "uuid",
+    "player_name": "Bob",
+    "duration_rounds": 3,
+    "start_round": 4,
+    "rounds_remaining": 3
+  }
+}
+```
+
+4. Emite `sala:status` para atualizar badges/contadores.
+5. **Ack:** `{ "ok": true, "penalty": { ... } }` ou `{ "ok": false, "error": "..." }`.
+
+Erros: `NAO_AUTORIZADO`, `SEM_RODADA_ATIVA`, `RODADA_INVALIDA`, `JOGADOR_NAO_BUZINOU`.
 
 ---
 
@@ -455,6 +495,7 @@ Renomeia o usuário sem trocar de identidade/sessão.
 | `buzina:ordem` | Todos | Alguém apertou a buzina |
 | `resposta:atualizada` | Apresentador | Jogador digitou resposta |
 | `placar:atualizado` | Todos | Apresentador alterou pontos |
+| `jogador:punido` | Todos | Apresentador aplicou punição de 3 rodadas |
 | `erro` | Quem enviou | Validação falhou |
 
 #### `sala:status`
@@ -478,7 +519,8 @@ Renomeia o usuário sem trocar de identidade/sessão.
         "score_cache": 10,
         "online": true,
         "is_duplicate": false,
-        "player_code": "A1B2"
+        "player_code": "A1B2",
+        "penalty": null
       },
       {
         "user_id": "uuid",
@@ -487,7 +529,14 @@ Renomeia o usuário sem trocar de identidade/sessão.
         "score_cache": 5,
         "online": false,
         "is_duplicate": false,
-        "player_code": "C3D4"
+        "player_code": "C3D4",
+        "penalty": {
+          "active": true,
+          "starts_next_round": false,
+          "rounds_remaining": 2,
+          "start_round": 3,
+          "until_round": 4
+        }
       }
     ],
     "current_round": {
@@ -534,6 +583,7 @@ Renomeia o usuário sem trocar de identidade/sessão.
 | Apertar buzina                |      | ✅        |
 | Escrever resposta             |      | ✅        |
 | Alterar pontos                |      | ✅        |
+| Aplicar punição (3 rodadas)   |      | ✅        |
 | Próxima rodada                |      | ✅        |
 | Sair da sala                  |      | ✅        |
 | Receber status atualizado     |      | ✅        |

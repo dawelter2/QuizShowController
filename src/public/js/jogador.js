@@ -1,4 +1,5 @@
 state.currentRoundId = null;
+state.myPenalty = null;
 let allScores = [];
 
 function setBuzzerState(mode) {
@@ -21,6 +22,23 @@ function updateBuzzerBadge(position) {
   }
 }
 
+function setPenaltyBanner(penalty) {
+  state.myPenalty = penalty || null;
+  const banner = $('player-penalty');
+  const text = $('player-penalty-text');
+  if (!banner || !text) return;
+
+  if (!penalty) {
+    banner.classList.add('hidden');
+    return;
+  }
+
+  banner.classList.remove('hidden');
+  text.textContent = penalty.active
+    ? `Sem buzinar por ${penalty.rounds_remaining} rodada(s)`
+    : `Punição: ${penalty.rounds_remaining} rodadas sem buzinar a partir da próxima rodada`;
+}
+
 function renderBuzzerOrder(order) {
   const orderEl = $('player-buzzer-order');
   if (!order || order.length === 0) { orderEl.innerHTML = ''; return; }
@@ -37,7 +55,11 @@ function applyRoundSnapshot(round) {
     $('player-status-round-num').textContent = round.round_number;
     const order = round.buzzer_order || [];
     const myBuzz = order.find(o => o.player_id === state.user.id);
-    setBuzzerState(myBuzz ? 'pressed' : 'active');
+    if (state.myPenalty?.active) {
+      setBuzzerState('punished');
+    } else {
+      setBuzzerState(myBuzz ? 'pressed' : 'active');
+    }
     updateBuzzerBadge(myBuzz?.position);
     buzzer.classList.toggle('first-buzz', order[0]?.player_id === state.user.id);
     renderBuzzerOrder(order);
@@ -53,6 +75,9 @@ function applyRoundSnapshot(round) {
 
 function handleBuzz(event) {
   if (!state.currentRoundId) return toast('Nenhuma rodada ativa');
+  if (state.myPenalty?.active) {
+    return toast(`Você está punido: ${state.myPenalty.rounds_remaining} rodada(s) sem buzinar`);
+  }
   const buzzer = $('player-buzzer');
   if (buzzer.disabled) return;
   if (navigator.vibrate) navigator.vibrate(50);
@@ -128,7 +153,9 @@ function connectPlayerSocket() {
     state.room = { ...state.room, ...data.room };
     $('player-room-title').textContent = state.room.title || 'Quiz';
     $('player-status-room-title').textContent = state.room.title || 'Quiz';
+    const mePlayer = data.players?.find(p => p.user_id === state.user.id);
     const me = data.scores?.find(s => s.player_id === state.user.id);
+    setPenaltyBanner(mePlayer?.penalty ?? me?.penalty ?? null);
     if (me) $('player-score').textContent = me.score;
     allScores = data.scores || [];
     updatePlayerRank(allScores);
@@ -138,17 +165,34 @@ function connectPlayerSocket() {
   state.socket.on('rodada:iniciada', (data) => {
     state.currentRoundId = data.round_id;
     $('player-status-round-num').textContent = data.round_number;
-    setBuzzerState('active');
+
+    const myPunishment = (data.punishments || []).find(p => p.player_id === state.user.id);
+    if (myPunishment) {
+      setPenaltyBanner({
+        active: true,
+        starts_next_round: false,
+        rounds_remaining: myPunishment.rounds_remaining,
+      });
+      setBuzzerState('punished');
+      toast(`Você está punido: ${myPunishment.rounds_remaining} rodada(s) sem buzinar`);
+    } else {
+      setPenaltyBanner(null);
+      setBuzzerState('active');
+    }
+
     updateBuzzerBadge(null);
     renderBuzzerOrder([]);
     showRoundGo();
     if (navigator.vibrate) navigator.vibrate(60);
+
     const buzzer = $('player-buzzer');
-    buzzer.classList.add('buzzer-activated');
-    buzzer.addEventListener('animationend', function onEnd() {
-      buzzer.classList.remove('buzzer-activated');
-      buzzer.removeEventListener('animationend', onEnd);
-    });
+    if (!myPunishment) {
+      buzzer.classList.add('buzzer-activated');
+      buzzer.addEventListener('animationend', function onEnd() {
+        buzzer.classList.remove('buzzer-activated');
+        buzzer.removeEventListener('animationend', onEnd);
+      });
+    }
   });
 
   state.socket.on('buzina:ordem', (data) => {
@@ -172,9 +216,27 @@ function connectPlayerSocket() {
 
   state.socket.on('placar:atualizado', (data) => {
     const me = data.scores.find(s => s.player_id === state.user.id);
-    if (me) $('player-score').textContent = me.score;
+    if (me) {
+      $('player-score').textContent = me.score;
+      setPenaltyBanner(me.penalty ?? null);
+    }
     allScores = data.scores;
     updatePlayerRank(data.scores);
+  });
+
+  state.socket.on('jogador:punido', (data) => {
+    if (!data) return;
+    if (data.player_id === state.user.id) {
+      setPenaltyBanner({
+        active: false,
+        starts_next_round: true,
+        rounds_remaining: data.duration_rounds,
+      });
+      toast(`Você errou! ${data.duration_rounds} rodadas sem buzinar.`);
+      if (navigator.vibrate) navigator.vibrate([80, 50, 80]);
+    } else {
+      toast(`${data.player_name} foi punido: ${data.duration_rounds} rodadas sem buzinar`);
+    }
   });
 
   state.socket.on('rodada:proxima', () => {
@@ -213,9 +275,12 @@ function renderPlacarOverlay() {
     const pct = Math.max((s.score / maxScore) * 100, 3);
     const isMe = s.player_id === state.user.id;
     const escName = escapeHtml(s.player_name || 'Jogador');
+    const penaltyBadge = s.penalty
+      ? '<span class="placar-penalty" title="Punido: ' + s.penalty.rounds_remaining + ' rodada(s) sem buzinar">🚫 ' + s.penalty.rounds_remaining + '</span>'
+      : '';
     html += '<div class="placar-row' + (isMe ? ' is-me' : '') + '" data-pos="' + pos + '">'
       + '<div class="placar-pos">' + posText + '</div>'
-      + '<div class="placar-name">' + escName + '</div>'
+      + '<div class="placar-name"><span class="placar-name-text">' + escName + '</span>' + penaltyBadge + '</div>'
       + '<div class="placar-score">' + s.score + '</div>'
       + '</div>'
       + '<div class="placar-bar-row' + (isMe ? ' is-me' : '') + '">'
