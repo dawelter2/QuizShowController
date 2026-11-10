@@ -47,9 +47,12 @@
   .player-card.podium-3 { border-color: rgba(225,112,85,.55); background: linear-gradient(90deg, rgba(225,112,85,.10), #1a1a2e 65%); }
   .btn-plus { background: #00b894; color: #fff; }
   .btn-minus { background: #d63031; color: #fff; }
+  .btn-punish { background: #d63031; color: #fff; }
 
   /* Presença e remoção */
   .player-card.is-offline { opacity: .62; }
+  .player-card.is-punished { border-color: rgba(214,48,49,.55); background: linear-gradient(90deg, rgba(214,48,49,.12), #1a1a2e 65%); }
+  .player-card .badge-punish { margin-left: .35rem; padding: .08rem .4rem; border-radius: 999px; background: rgba(214,48,49,.2); border: 1px solid rgba(214,48,49,.55); color: #ff7878; font-size: .7rem; font-weight: 800; white-space: nowrap; flex-shrink: 0; }
   .presence-dot { width: 9px; height: 9px; border-radius: 50%; background: #636e72; flex-shrink: 0; margin-right: .5rem; display: inline-block; }
   .presence-dot.online { background: #00b894; box-shadow: 0 0 6px rgba(0,184,148,.8); }
   .player-card .player-code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: .68rem; font-weight: 700; color: #636e72; margin-left: .5rem; letter-spacing: .02em; }
@@ -67,6 +70,7 @@
   .content.layout-video .player-card .player-score-actions { gap: .3rem; }
   .content.layout-video .player-card .player-code,
   .content.layout-video .player-card .badge-dup { display: none; }
+  .content.layout-video .player-card .badge-punish { font-size: .6rem; padding: .04rem .3rem; margin-left: .2rem; }
   .content.layout-video .player-card .btn-kick { width: 23px; height: 23px; font-size: .68rem; }
   .content.layout-video .round-controls-wrap { margin-bottom: 0; }
   .content.layout-video .flex-row { gap: .35rem; }

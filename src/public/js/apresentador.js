@@ -31,10 +31,19 @@ function renderPresenterPlayers(players) {
     const medal = ['🥇', '🥈', '🥉'][rank - 1] || rank + 'º';
     const podiumCls = rank <= 3 ? ` podium-${rank}` : '';
     const online = p.online !== false;
-    const cls = `player-card${podiumCls}${online ? '' : ' is-offline'}`;
+    const penalty = p.penalty;
+    const cls = `player-card${podiumCls}${online ? '' : ' is-offline'}${penalty ? ' is-punished' : ''}`;
     const presenceHtml = `<span class="presence-dot ${online ? 'online' : 'offline'}" title="${online ? 'Online' : 'Offline'}" aria-label="${online ? 'Online' : 'Offline'}"></span>`;
     const codeHtml = p.player_code ? `<span class="player-code" title="Código interno do jogador">#${escapeHtml(p.player_code)}</span>` : '';
     const dupHtml = p.is_duplicate ? `<span class="badge-dup" title="Nome duplicado na sala">⚠️</span>` : '';
+    const penaltyTitle = penalty
+      ? (penalty.active
+        ? `Punido: ${penalty.rounds_remaining} rodada(s) sem buzinar`
+        : `Punição começa na próxima rodada (${penalty.rounds_remaining} rodadas)`)
+      : '';
+    const penaltyHtml = penalty
+      ? `<span class="badge-punish" title="${penaltyTitle}">🚫 ${penalty.rounds_remaining}</span>`
+      : '';
 
     return `
       <div class="${cls}" id="pp-${p.user_id}">
@@ -42,6 +51,7 @@ function renderPresenterPlayers(players) {
         <div class="player-identity">
           ${presenceHtml}
           <span class="name">${escapeHtml(p.name)}</span>
+          ${penaltyHtml}
           ${codeHtml}
           ${dupHtml}
         </div>
@@ -77,7 +87,10 @@ function renderPresenterScores(scores) {
     if (el) el.textContent = s.score;
     // Atualiza o cache local para evitar reversão no re-render (ex: próxima rodada)
     const p = state.players?.find(p => p.user_id === s.player_id);
-    if (p) p.score_cache = s.score;
+    if (p) {
+      p.score_cache = s.score;
+      p.penalty = s.penalty;
+    }
   });
 
   if (orderChanged) renderBuzzerOrderList();
@@ -96,8 +109,13 @@ function renderBuzzerOrderList() {
 
   const rawOrder = (state.buzzerOrder || []).slice().sort((a, b) => a.position - b.position);
   const activeIds = new Set((state.players || []).filter(p => p.role === 'player').map(p => p.user_id));
+  // Jogadores punidos não voltam para a lista de pendentes (inclusive após refresh).
+  const punishedIds = new Set(
+    (state.players || []).filter(p => p.role === 'player' && p.penalty).map(p => p.user_id)
+  );
   const pending = rawOrder.filter(o =>
     !state.judgedPlayers.has(o.player_id) &&
+    !punishedIds.has(o.player_id) &&
     (activeIds.size === 0 || activeIds.has(o.player_id))
   );
 
@@ -128,7 +146,7 @@ function renderBuzzerOrderList() {
         <div class="buzz-actions">
           <button class="btn-plus" onclick="changeScore('${o.player_id}', 3)" title="+3 pontos">+3</button>
           <button class="btn-plus" onclick="changeScore('${o.player_id}', 1)" title="+1 ponto">+1</button>
-          <button class="btn-minus" onclick="changeScore('${o.player_id}', -2)" title="-2 pontos">-2</button>
+          <button class="btn-punish" onclick="punishPlayer('${o.player_id}')" title="Errou: 3 rodadas sem buzinar" aria-label="Punir por 3 rodadas">Errou</button>
         </div>
       </div>
     `;
@@ -155,6 +173,11 @@ function applyRoundSnapshot(round) {
     state.buzzerOrder = round.buzzer_order || [];
     // Ao reconectar no meio da rodada, mantém quem já foi pontuado fora da ordem.
     if (!sameRound) state.judgedPlayers.clear();
+    // Jogadores já punidos também saem da lista de pendentes.
+    const punishedIds = new Set((state.players || []).filter(p => p.penalty).map(p => p.user_id));
+    for (const entry of state.buzzerOrder) {
+      if (punishedIds.has(entry.player_id)) state.judgedPlayers.add(entry.player_id);
+    }
     $('pres-round-num').textContent = round.round_number;
     updateRoundButton(true);
     renderBuzzerOrder(state.buzzerOrder);
@@ -290,6 +313,27 @@ function changeScore(playerId, delta) {
   }
 }
 
+function punishPlayer(playerId) {
+  if (!state.currentRoundId) return toast('Inicie uma rodada primeiro');
+
+  const player = state.players?.find(p => p.user_id === playerId);
+  if (player?.penalty) return toast(`${player.name} já está cumprindo punição`);
+
+  state.socket.emit('jogador:punir', {
+    room_id: state.room.id,
+    round_id: state.currentRoundId,
+    player_id: playerId,
+  }, (res) => {
+    if (!res || !res.ok) {
+      toast((res && res.error) || 'Não foi possível aplicar a punição');
+    }
+  });
+
+  if (state.autoNextRound) {
+    handleNextRound();
+  }
+}
+
 function handleRemovePlayer(userId) {
   const player = state.players?.find(p => p.user_id === userId);
   if (!player) return;
@@ -314,7 +358,7 @@ function openScore() {
 }
 
 function handleResetGame() {
-  if (!confirm('Deseja realmente REINICIAR a partida?\n\nIsso irá:\n- Zerar todos os pontos\n- Resetar o contador de rodadas para 1\n\nEssa ação não pode ser desfeita.')) return;
+  if (!confirm('Deseja realmente REINICIAR a partida?\n\nIsso irá:\n- Zerar todos os pontos\n- Remover as punições\n- Resetar o contador de rodadas para 1\n\nEssa ação não pode ser desfeita.')) return;
   
   state.socket.emit('jogo:resetar', {
     room_id: state.room.id
@@ -362,6 +406,15 @@ function connectPresenterSocket() {
   });
 
   state.socket.on('placar:atualizado', (data) => renderPresenterScores(data.scores));
+
+  state.socket.on('jogador:punido', (data) => {
+    if (!data) return;
+    if (state.buzzerOrder.some(o => o.player_id === data.player_id)) {
+      state.judgedPlayers.add(data.player_id);
+      renderBuzzerOrderList();
+    }
+    toast(`${data.player_name} punido: ${data.duration_rounds} rodadas sem buzinar`);
+  });
 
   state.socket.on('rodada:proxima', () => {
     state.currentRoundId = null;

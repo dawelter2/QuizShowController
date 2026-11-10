@@ -1,5 +1,9 @@
 # Simulação de Partida: 5 Perguntas de Matemática
 
+> ⚠️ **Regra atualizada:** errar não tira mais pontos. O jogador fica **3 rodadas sem poder buzinar**
+> (R+1, R+2 e R+3 após o erro). Esta simulação foi escrita antes da mudança e mantém a pontuação
+> original apenas como exemplo histórico.
+
 ## Participantes
 
 | Papel        | Nome   |
@@ -220,6 +224,6 @@ Mestre decide:
 |---|---|---|
 | Jogador apertou buzina 2x na mesma rodada | Rodada 4 (Bob) | Segundo clique ignorado |
 | Jogador apertou buzina mas não respondeu | Rodada 3 (Ana) | Campo vazio, apresentador vê, 0 pontos |
-| Jogador errou e levou pontos negativos | Rodada 1 e 2 (Carol) | -1 possível |
+| Jogador errou | Rodada 1 e 2 (Carol) | Regra atual: 3 rodadas sem buzinar, sem perder pontos (a simulação acima usa a regra antiga) |
 | Apresentador deu pontuação diferente do padrão | Rodada 5 (Carol +3) | Valor livre |
 | Todos apertaram buzina | Todas as rodadas | Ordem sempre registrada |

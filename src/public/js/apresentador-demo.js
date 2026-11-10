@@ -16,7 +16,8 @@
     { user_id: 'p07', name: 'Gabi',   role: 'player', score_cache: 2,  online: true,  player_code: 'G07', is_duplicate: false },
     { user_id: 'p08', name: 'Hugo',   role: 'player', score_cache: 1,  online: true,  player_code: 'H08', is_duplicate: false },
     { user_id: 'p09', name: 'Igor',   role: 'player', score_cache: 0,  online: true,  player_code: 'I09', is_duplicate: false },
-    { user_id: 'p10', name: 'Julia',  role: 'player', score_cache: -2, online: true,  player_code: 'J10', is_duplicate: false },
+    { user_id: 'p10', name: 'Julia',  role: 'player', score_cache: -2, online: true,  player_code: 'J10', is_duplicate: false,
+      penalty: { active: true, starts_next_round: false, rounds_remaining: 2, start_round: 3, until_round: 4 } },
   ];
 
   // Cinco primeiros cliques da rodada, na ordem em que chegaram.
@@ -75,7 +76,24 @@
     state.buzzerOrder = [];
     state.judgedPlayers.clear();
     const current = parseInt($('pres-round-num').textContent, 10) || 1;
-    $('pres-round-num').textContent = String(current + 1);
+    const newRound = current + 1;
+
+    // Simula o avanço da punição: 3, 2, 1 rodadas e depois libera.
+    state.players.forEach(p => {
+      if (!p.penalty) return;
+      if (newRound > p.penalty.until_round) {
+        p.penalty = null;
+      } else if (newRound >= p.penalty.start_round) {
+        p.penalty = {
+          ...p.penalty,
+          active: true,
+          starts_next_round: false,
+          rounds_remaining: p.penalty.until_round - newRound + 1,
+        };
+      }
+    });
+
+    $('pres-round-num').textContent = String(newRound);
     updateRoundButton(true);
     renderBuzzerOrder([]);
     renderPresenterPlayers(state.players);
@@ -97,6 +115,30 @@
       state.prevScoresByPid[playerId] = player.score_cache;
       renderPresenterPlayers(state.players);
     }
+
+    if (state.autoNextRound) startDemoRound();
+  };
+
+  // Simula a punição de 3 rodadas sem socket.
+  window.punishPlayer = function (playerId) {
+    if (!state.currentRoundId) return toast('Inicie uma rodada primeiro');
+
+    const player = state.players?.find(p => p.user_id === playerId);
+    if (!player) return;
+    if (player.penalty) return toast(`${player.name} já está cumprindo punição`);
+
+    const current = parseInt($('pres-round-num').textContent, 10) || 1;
+    player.penalty = {
+      active: false,
+      starts_next_round: true,
+      rounds_remaining: 3,
+      start_round: current + 1,
+      until_round: current + 3,
+    };
+    state.judgedPlayers.add(playerId);
+    renderPresenterPlayers(state.players);
+    renderBuzzerOrderList();
+    toast(`${player.name} punido: 3 rodadas sem buzinar`);
 
     if (state.autoNextRound) startDemoRound();
   };
@@ -123,8 +165,8 @@
   };
 
   window.handleResetGame = function () {
-    if (!confirm('Reiniciar o exemplo?\\n\\nOs pontos voltam a zero e a lista de cliques é limpa.')) return;
-    state.players.forEach(p => { p.score_cache = 0; });
+    if (!confirm('Reiniciar o exemplo?\\n\\nOs pontos voltam a zero, as punições somem e a lista de cliques é limpa.')) return;
+    state.players.forEach(p => { p.score_cache = 0; p.penalty = null; });
     state.prevScoresByPid = {};
     state.players.forEach(p => { state.prevScoresByPid[p.user_id] = 0; });
     state.buzzerOrder = [];

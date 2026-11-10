@@ -32,6 +32,20 @@ export type RoomPlayer = {
   claimed_at: string;
   last_online_at: string | null;
   score_cache: number;
+  // Punição por erro: fica sem buzinar de penalty_start_round a penalty_until_round.
+  // 0 nos dois campos significa "sem punição".
+  penalty_start_round: number;
+  penalty_until_round: number;
+};
+
+export const PENALTY_ROUNDS = 3;
+
+export type PlayerPenalty = {
+  active: boolean;
+  starts_next_round: boolean;
+  rounds_remaining: number;
+  start_round: number;
+  until_round: number;
 };
 
 export type RoomPlayerView = RoomPlayer & {
@@ -39,6 +53,7 @@ export type RoomPlayerView = RoomPlayer & {
   online: boolean;
   is_duplicate: boolean;
   player_code: string;
+  penalty: PlayerPenalty | null;
 };
 
 export type Round = {
@@ -277,6 +292,7 @@ function addMembership(roomId: string, userId: string, role: 'presenter' | 'play
     room_id: roomId, user_id: userId, name: user.name, role,
     joined_at: now, left_at: null, kicked_at: null,
     claimed_at: now, last_online_at: null, score_cache: 0,
+    penalty_start_round: 0, penalty_until_round: 0,
   };
   players.set(userId, player);
   touchRoom(roomId);
@@ -449,6 +465,7 @@ export function listRoomPlayers(roomId: string): RoomPlayerView[] {
       online: isPlayerOnline(roomId, p.user_id),
       is_duplicate: p.role === 'player' && (nameCounts.get(normalizePlayerName(p.name)) ?? 0) > 1,
       player_code: playerCode(p.user_id),
+      penalty: getPlayerPenalty(roomId, p.user_id),
     }));
 }
 
@@ -457,6 +474,113 @@ export function updateScoreCache(roomId: string, userId: string, score: number) 
   if (player) {
     player.score_cache = score;
     touchRoom(roomId);
+  }
+}
+
+// ─── Penalties ───────────────────────────────────────
+
+export function getCurrentRoundNumber(roomId: string): number {
+  // Os números de rodada são sequenciais e nunca são reaproveitados, então a
+  // quantidade de rodadas criadas é o número da última rodada.
+  return (roomRoundsMap.get(roomId) ?? []).length;
+}
+
+export function getPlayerPenalty(
+  roomId: string,
+  userId: string,
+  atRound: number = getCurrentRoundNumber(roomId),
+): PlayerPenalty | null {
+  const player = roomPlayersMap.get(roomId)?.get(userId);
+  if (!player) return null;
+
+  const start = player.penalty_start_round;
+  const until = player.penalty_until_round;
+  if (start <= 0 || until <= 0) return null;
+
+  if (atRound < start) {
+    return {
+      active: false,
+      starts_next_round: true,
+      rounds_remaining: until - start + 1,
+      start_round: start,
+      until_round: until,
+    };
+  }
+
+  if (atRound <= until) {
+    return {
+      active: true,
+      starts_next_round: false,
+      rounds_remaining: until - atRound + 1,
+      start_round: start,
+      until_round: until,
+    };
+  }
+
+  return null;
+}
+
+export function isPlayerPunished(
+  roomId: string,
+  userId: string,
+  atRound: number = getCurrentRoundNumber(roomId),
+): boolean {
+  return getPlayerPenalty(roomId, userId, atRound)?.active === true;
+}
+
+export type PunishPlayerResult =
+  | { ok: true; penalty: PlayerPenalty }
+  | { ok: false; code: 'ROOM_NOT_FOUND' | 'PLAYER_NOT_FOUND' | 'NO_ROUND'; message: string };
+
+export function punishPlayer(
+  roomId: string,
+  userId: string,
+  duration = PENALTY_ROUNDS,
+): PunishPlayerResult {
+  const room = roomsMap.get(roomId);
+  if (!room) return { ok: false, code: 'ROOM_NOT_FOUND', message: 'Sala não encontrada' };
+
+  const player = roomPlayersMap.get(roomId)?.get(userId);
+  if (!player || player.left_at !== null || player.role !== 'player') {
+    return { ok: false, code: 'PLAYER_NOT_FOUND', message: 'Jogador não está ativo na sala' };
+  }
+
+  const currentRound = getCurrentRoundNumber(roomId);
+  if (currentRound === 0) {
+    return { ok: false, code: 'NO_ROUND', message: 'Inicie uma rodada primeiro' };
+  }
+
+  // Sem empilhamento: se já existe punição pendente/ativa, mantém a atual.
+  const existing = getPlayerPenalty(roomId, userId, currentRound);
+  if (existing) return { ok: true, penalty: existing };
+
+  const start = currentRound + 1;
+  const until = currentRound + Math.max(1, duration);
+  player.penalty_start_round = start;
+  player.penalty_until_round = until;
+  touchRoom(roomId);
+
+  return {
+    ok: true,
+    penalty: {
+      active: false,
+      starts_next_round: true,
+      rounds_remaining: until - start + 1,
+      start_round: start,
+      until_round: until,
+    },
+  };
+}
+
+export function expirePlayerPenalties(roomId: string, atRound: number) {
+  const players = roomPlayersMap.get(roomId);
+  if (!players) return;
+
+  for (const player of players.values()) {
+    if (player.penalty_until_round > 0 && atRound > player.penalty_until_round) {
+      player.penalty_start_round = 0;
+      player.penalty_until_round = 0;
+    }
   }
 }
 
@@ -470,9 +594,14 @@ export function createRound(roomId: string, roundNumber: number, mediaUrl: strin
   const ids = roomRoundsMap.get(roomId) ?? [];
   ids.push(id);
   roomRoundsMap.set(roomId, ids);
+  expirePlayerPenalties(roomId, roundNumber);
   buzzersMap.set(id, []);
   touchRoom(roomId);
   return round;
+}
+
+export function findRoundById(id: string): Round | undefined {
+  return roundsMap.get(id);
 }
 
 export function closeRound(id: string) {
@@ -521,22 +650,29 @@ export function getBuzzerOrder(roundId: string): (BuzzerEvent & { player_name: s
 
 // ─── Scores ──────────────────────────────────────────
 
-export function getRoomScores(roomId: string): { player_id: string; player_name: string; score: number }[] {
+export function getRoomScores(roomId: string): { player_id: string; player_name: string; score: number; penalty: PlayerPenalty | null }[] {
   const players = roomPlayersMap.get(roomId);
   if (!players) return [];
   return Array.from(players.values())
     .filter(p => p.left_at === null && p.role === 'player')
     .sort((a, b) => b.score_cache - a.score_cache)
-    .map(p => ({ player_id: p.user_id, player_name: p.name, score: p.score_cache }));
+    .map(p => ({
+      player_id: p.user_id,
+      player_name: p.name,
+      score: p.score_cache,
+      penalty: getPlayerPenalty(roomId, p.user_id),
+    }));
 }
 
 export function resetRoomGame(roomId: string) {
-  // Reset de scores e de remoções (escape hatch para remoção acidental)
+  // Reset de scores, punições e remoções (escape hatch para remoção acidental)
   const players = roomPlayersMap.get(roomId);
   if (players) {
     for (const player of players.values()) {
       player.score_cache = 0;
       player.kicked_at = null;
+      player.penalty_start_round = 0;
+      player.penalty_until_round = 0;
     }
   }
 

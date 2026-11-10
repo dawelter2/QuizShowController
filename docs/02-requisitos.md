@@ -18,7 +18,7 @@
 
 - Botão **Começar Rodada** — libera buzinas para os jogadores e reseta campos de resposta
 - Botão **Próxima Rodada** — limpa campos de resposta, mantém score
-- Controles de **+1, +2, +5, -1, -2, -5** pontos para cada jogador
+- Controles de **+3** e **+1** pontos para acertos e **Errou** para aplicar a punição de 3 rodadas
 - Visualização da **ordem das buzinas** (quem apertou primeiro)
 - Visualização das **respostas escritas** por cada jogador
 
@@ -38,7 +38,10 @@
 ### Pontuação
 
 - Score acumulado por jogador através das rodadas
-- Apresentador adiciona ou remove pontos manualmente
+- Acertos somam pontos definidos pelo apresentador (+3 ou +1)
+- **Errar não remove pontos**: o jogador recebe uma punição de **3 rodadas sem poder buzinar** (R+1, R+2 e R+3 após o erro)
+- A punição não acumula: se o jogador já está punido, uma nova punição é ignorada
+- A punição termina sozinha após a 3ª rodada; **Reiniciar Partida** limpa todas as punições
 - Placar visível para todos (apresentador, jogadores, OBS)
 - Score nunca reseta entre rodadas
 

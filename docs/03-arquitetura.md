@@ -8,7 +8,7 @@
 │  (Notebook principal)                            │
 │  ┌───────────────────────────────────────────┐  │
 │  │ Painel de Controle                         │  │
-│  │ - Lista de jogadores com botões +/- pontos │  │
+│  │ - Lista de jogadores com +3/+1/Errou      │  │
 │  │ - Botão "Começar Rodada"                  │  │
 │  │ - Botão "Próxima Rodada"                  │  │
 │  │ - Ordem das buzinas                        │  │
@@ -58,12 +58,14 @@
 | `sala:entrar`                 | Cliente → Servidor | Entrar em sala com código        |
 | `sala:jogadores`              | Servidor → Todos   | Lista de jogadores atualizada    |
 | `rodada:iniciar`              | Apresentador → Servidor | Libera buzinas e reseta campos |
-| `rodada:iniciada`             | Servidor → Todos   | Sinal que nova rodada começou    |
-| `buzina:apertar`              | Jogador → Servidor | Jogador apertou buzina           |
+| `rodada:iniciada`             | Servidor → Todos   | Nova rodada começou (inclui punições ativas) |
+| `buzina:apertar`              | Jogador → Servidor | Jogador apertou buzina (recusado se punido) |
 | `buzina:ordem`               | Servidor → Todos   | Ordem atualizada das buzinas     |
 | `resposta:escrever`           | Jogador → Servidor | Jogador digitou resposta         |
 | `resposta:atualizada`         | Servidor → Apresentador | Resposta do jogador         |
 | `rodada:proxima`              | Apresentador → Servidor | Limpa campos, mantém score   |
-| `pontos:alterar`              | Apresentador → Servidor | +N ou -N pontos para jogador |
+| `pontos:alterar`              | Apresentador → Servidor | +3/+1 pontos para jogador    |
+| `jogador:punir`               | Apresentador → Servidor | Aplica 3 rodadas sem buzinar |
+| `jogador:punido`              | Servidor → Todos   | Jogador punido (nome e duração)  |
 | `placar:atualizado`           | Servidor → Todos   | Scoreboard atualizado            |
 | `sala:status`                 | Servidor → Cliente | Estado completo da sala          |

@@ -1,9 +1,10 @@
 import { Server, Socket } from 'socket.io';
 import {
   findRoomById, listRoomPlayers,
-  createRound, closeRound, findCurrentRound, countRounds,
+  createRound, closeRound, findCurrentRound, findRoundById, countRounds,
   registerBuzz, getBuzzerOrder,
   updateScoreCache, getRoomScores, resetRoomGame,
+  getPlayerPenalty, punishPlayer, PENALTY_ROUNDS,
   joinRoomAsPlayer, removePlayerFromRoom, kickPlayerFromRoom,
   bindPlayerSocket, unbindPlayerSocket, listPlayerSocketIds,
   isActiveRoomMember, renameUser, isNameTakenInRoom, sanitizePlayerName,
@@ -180,15 +181,21 @@ export function setupSocketEvents(io: Server) {
         data.correct_answer || '',
       );
 
+      // Jogadores punidos entram na rodada com a buzina bloqueada; o contador
+      // diminui a cada nova rodada.
+      const punishments = listRoomPlayers(data.room_id)
+        .filter(p => p.penalty?.active === true)
+        .map(p => ({ player_id: p.user_id, rounds_remaining: p.penalty?.rounds_remaining ?? 0 }));
+
       io.to(data.room_id).emit('rodada:iniciada', {
         round_id: round.id,
         round_number: round.round_number,
         media_url: round.media_url,
+        punishments,
       });
 
-      // Atualiza status da sala
-      const players = listRoomPlayers(data.room_id);
-      io.to(data.room_id).emit('sala:jogadores', { players });
+      // Status completo: atualiza badges de punição e contadores em todas as telas.
+      emitRoomStatus(io, data.room_id);
     });
 
     // ─── Buzina: apertar ───────────────────────────
@@ -198,6 +205,22 @@ export function setupSocketEvents(io: Server) {
       if (!clientData?.room_id || clientData.user_id !== data.player_id ||
           !isActiveRoomMember(clientData.room_id, data.player_id)) {
         socket.emit('erro', { code: 'NAO_AUTORIZADO', message: 'Jogador não está ativo na sala' });
+        return;
+      }
+
+      const round = findRoundById(data.round_id);
+      if (!round || round.room_id !== clientData.room_id) {
+        socket.emit('erro', { code: 'RODADA_INVALIDA', message: 'Rodada não encontrada' });
+        return;
+      }
+
+      // Punição por erro: não pode buzinar nas rodadas seguintes ao erro.
+      const penalty = getPlayerPenalty(clientData.room_id, data.player_id, round.round_number);
+      if (penalty?.active) {
+        socket.emit('erro', {
+          code: 'PUNIDO',
+          message: `Você está punido: ${penalty.rounds_remaining} rodada(s) sem buzinar`,
+        });
         return;
       }
 
@@ -238,6 +261,61 @@ export function setupSocketEvents(io: Server) {
 
       const scores = getRoomScores(data.room_id);
       io.to(data.room_id).emit('placar:atualizado', { room_id: data.room_id, scores });
+    });
+
+    // ─── Jogador: punir (erro) ─────────────────────
+
+    socket.on('jogador:punir', (data: { room_id: string; player_id: string; round_id?: string }, ack?: Ack) => {
+      const room = findRoomById(data.room_id);
+      const presenterId = clientMap.get(socket.id)?.user_id;
+      if (!room || !presenterId || presenterId !== room.presenter_id) {
+        const message = 'Apenas o apresentador pode aplicar punições';
+        socket.emit('erro', { code: 'NAO_AUTORIZADO', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+
+      const currentRound = findCurrentRound(data.room_id);
+      if (!currentRound || currentRound.status !== 'active') {
+        const message = 'Inicie uma rodada primeiro';
+        socket.emit('erro', { code: 'SEM_RODADA_ATIVA', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+
+      if (data.round_id && data.round_id !== currentRound.id) {
+        const message = 'Rodada inválida';
+        socket.emit('erro', { code: 'RODADA_INVALIDA', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+
+      // O botão "Errou" só existe para quem apertou a buzina nesta rodada.
+      const hasBuzzed = getBuzzerOrder(currentRound.id).some(e => e.player_id === data.player_id);
+      if (!hasBuzzed) {
+        const message = 'Este jogador não apertou a buzina nesta rodada';
+        socket.emit('erro', { code: 'JOGADOR_NAO_BUZINOU', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+
+      const result = punishPlayer(data.room_id, data.player_id);
+      if (!result.ok) {
+        socket.emit('erro', { code: result.code, message: result.message });
+        ack?.({ ok: false, error: result.message });
+        return;
+      }
+
+      const player = listRoomPlayers(data.room_id).find(p => p.user_id === data.player_id);
+      io.to(data.room_id).emit('jogador:punido', {
+        player_id: data.player_id,
+        player_name: player?.name ?? 'Jogador',
+        duration_rounds: PENALTY_ROUNDS,
+        start_round: result.penalty.start_round,
+        rounds_remaining: result.penalty.rounds_remaining,
+      });
+      emitRoomStatus(io, data.room_id);
+      ack?.({ ok: true, penalty: result.penalty });
     });
 
     // ─── Rodada: próxima ───────────────────────────
@@ -299,6 +377,7 @@ function emitRoomStatus(io: Server, roomId: string) {
       online: p.online,
       is_duplicate: p.is_duplicate,
       player_code: p.player_code,
+      penalty: p.penalty,
     })),
     scores,
     current_round: currentRound ? {

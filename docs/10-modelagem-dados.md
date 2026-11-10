@@ -75,7 +75,7 @@ users ──< room_players >── rooms
                                 │   errado,             │
                                 │   none)               │
                                 │ score_delta (INT)     │
-                                │   ex: +3, +1, -2, 0  │
+                                │   ex: +3, +1, 0       │
                                 │ judged_by (FK→users)  │
                                 │ judged_at             │
                                 └──────────────────────┘
@@ -121,6 +121,8 @@ users ──< room_players >── rooms
 | claimed_at   | TIMESTAMP   | Última entrada/adoção; reserva o nome por 10 s antes do socket conectar |
 | last_online_at | TIMESTAMP | Última vez que teve socket ativo (null = nunca conectou) |
 | score_cache  | INT         | Score total (desnormalizado)          |
+| penalty_start_round | INT  | Primeira rodada sem buzinar (0 = sem punição) |
+| penalty_until_round | INT  | Última rodada sem buzinar (0 = sem punição) |
 
 > `online` não é persistido: é derivado dos sockets conectados (`presenceMap`).
 > O estado é mantido em memória; `data/quiz.db` não é usado por esta versão.
@@ -162,7 +164,7 @@ users ──< room_players >── rooms
 | text         | TEXT        | Resposta escrita                       |
 | submitted_at | TIMESTAMP   |                                        |
 | judgment     | ENUM        | `na_mosca | raspando | errado | none` |
-| score_delta  | INT         | Pontos atribuídos (+3, +1, -2, 0)    |
+| score_delta  | INT         | Pontos atribuídos (+3, +1, 0)        |
 | judged_by    | UUID (FK)   | Apresentador que julgou               |
 | judged_at    | TIMESTAMP   |                                        |
 
@@ -198,7 +200,7 @@ Com os dados acima, é possível extrair:
 | **Evolução por rodada**          | `score_delta` acumulado ao longo das rodadas                |
 | **Desempenho por tipo**          | Se categorizar perguntas (filmes, música, etc.)             |
 | **Engajamento**                  | Nº de salas por jogador, tempo total em salas              |
-| **Punições mais frequentes**     | Quem mais erra e toma -2                                    |
+| **Punições mais frequentes**     | Quem mais erra e recebe 3 rodadas sem buzinar                |
 
 ### Tabela de Agregados (opcional, para performance)
 
