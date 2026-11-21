@@ -1,4 +1,6 @@
 import { v4 as uuid } from 'uuid';
+import { DEFAULT_BUZZER_ORDER_CONFIG, defaultConfigFor } from './game-types.js';
+import type { GameTypeId, RoomConfig } from './game-types.js';
 
 // ─── Types ───────────────────────────────────────────
 
@@ -16,6 +18,11 @@ export type Room = {
   presenter_id: string;
   title: string;
   notes: string;
+  // Tipo de tela de jogo ("Ordem das Buzinas" ou "Respostas").
+  type: GameTypeId;
+  // Opções escolhidas na criação da sala; sempre normalizadas no servidor.
+  // Cada tipo grava apenas os campos que declara no catálogo.
+  config: RoomConfig;
   status: 'waiting' | 'playing' | 'finished';
   created_at: string;
   ended_at: string | null;
@@ -38,7 +45,7 @@ export type RoomPlayer = {
   penalty_until_round: number;
 };
 
-export const PENALTY_ROUNDS = 3;
+export const PENALTY_ROUNDS = DEFAULT_BUZZER_ORDER_CONFIG.penalty_rounds;
 
 export type PlayerPenalty = {
   active: boolean;
@@ -65,6 +72,13 @@ export type Round = {
   status: 'waiting' | 'active' | 'done';
   started_at: string | null;
   ended_at: string | null;
+  // Estado do tipo "Respostas".
+  answers_revealed: boolean;
+  answers_graded: boolean;
+  correct_option: number | null;
+  // Jogadores elegíveis no início da rodada (snapshot): quem entrou depois
+  // não responde nesta rodada.
+  eligible_player_ids: string[];
 };
 
 export type BuzzerEvent = {
@@ -73,6 +87,31 @@ export type BuzzerEvent = {
   player_id: string;
   position: number;
   timestamp: string;
+};
+
+export type AnswerEvent = {
+  id: string;
+  round_id: string;
+  player_id: string;
+  // Índice da alternativa (1..N), conforme a configuração da sala.
+  option: number;
+  position: number;
+  timestamp: string;
+  // Preenchidos quando o apresentador corrige a rodada.
+  is_correct?: boolean;
+  awarded_points?: number;
+};
+
+export type AnswerView = {
+  id: string;
+  player_id: string;
+  player_name: string;
+  position: number;
+  // null enquanto as respostas ainda não foram reveladas.
+  option: number | null;
+  timestamp: string;
+  is_correct: boolean | null;
+  awarded_points: number | null;
 };
 
 // ─── State ───────────────────────────────────────────
@@ -93,6 +132,7 @@ const roundsMap = new Map<string, Round>();
 const roomRoundsMap = new Map<string, string[]>(); // room_id → [round_id]
 
 const buzzersMap = new Map<string, BuzzerEvent[]>(); // round_id → ordered events
+const answersMap = new Map<string, AnswerEvent[]>(); // round_id → ordered answers
 
 // Janela em que uma entrada recém-criada (ainda sem socket) reserva o nome.
 const CLAIM_TTL_MS = 10_000;
@@ -164,15 +204,25 @@ function generateRoomCode(): string {
 
 // ─── Rooms ───────────────────────────────────────────
 
-export function createRoom(presenterId: string, title: string, notes: string): Room {
+export function createRoom(
+  presenterId: string,
+  title: string,
+  notes: string,
+  type: GameTypeId = 'buzzer-order',
+  config: RoomConfig = defaultConfigFor(type),
+): Room {
   const id = uuid();
   let code: string;
   do { code = generateRoomCode(); } while (roomCodeIndex.has(code));
 
   const now = new Date().toISOString();
-  const room: Room = { id, code, presenter_id: presenterId, title, notes, status: 'waiting', created_at: now, ended_at: null, last_activity_at: now };
+  const room: Room = {
+    id, code, presenter_id: presenterId, title, notes,
+    type, config: { ...config },
+    status: 'waiting', created_at: now, ended_at: null, last_activity_at: now,
+  };
   roomsMap.set(id, room);
-  console.log(`[DEBUG] Sala criada: ${title} (${code})`);
+  console.log(`[DEBUG] Sala criada: ${title} (${code}) tipo=${type}`);
   roomCodeIndex.set(code, id);
   roomPlayersMap.set(id, new Map());
   roomRoundsMap.set(id, []);
@@ -195,11 +245,15 @@ export function listActiveRooms(): Room[] {
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
-export function updateRoom(id: string, data: { title?: string; notes?: string }): Room | undefined {
+export function updateRoom(
+  id: string,
+  data: { title?: string; notes?: string; config?: RoomConfig },
+): Room | undefined {
   const room = roomsMap.get(id);
   if (!room) return undefined;
   if (data.title !== undefined) room.title = data.title;
   if (data.notes !== undefined) room.notes = data.notes;
+  if (data.config !== undefined) room.config = { ...data.config };
   touchRoom(id);
   return room;
 }
@@ -266,6 +320,18 @@ export function isPlayerOnline(roomId: string, userId: string): boolean {
 
 export function listPlayerSocketIds(roomId: string, userId: string): string[] {
   return Array.from(presenceMap.get(roomId)?.get(userId) ?? []);
+}
+
+// Todos os sockets conectados de jogadores da sala (usado para enviar dados
+// personalizados, como a própria resposta, sem expor a dos demais).
+export function listRoomSocketEntries(roomId: string): { user_id: string; socket_id: string }[] {
+  const byUser = presenceMap.get(roomId);
+  if (!byUser) return [];
+  const entries: { user_id: string; socket_id: string }[] = [];
+  for (const [userId, sockets] of byUser) {
+    for (const socketId of sockets) entries.push({ user_id: userId, socket_id: socketId });
+  }
+  return entries;
 }
 
 // ─── Room Players ────────────────────────────────────
@@ -529,13 +595,14 @@ export function isPlayerPunished(
 }
 
 export type PunishPlayerResult =
-  | { ok: true; penalty: PlayerPenalty }
+  | { ok: true; penalty_type: 'rounds'; penalty: PlayerPenalty; points_subtracted: 0 }
+  | { ok: true; penalty_type: 'points'; penalty: null; points_subtracted: number; new_score: number }
   | { ok: false; code: 'ROOM_NOT_FOUND' | 'PLAYER_NOT_FOUND' | 'NO_ROUND'; message: string };
 
 export function punishPlayer(
   roomId: string,
   userId: string,
-  duration = PENALTY_ROUNDS,
+  duration?: number,
 ): PunishPlayerResult {
   const room = roomsMap.get(roomId);
   if (!room) return { ok: false, code: 'ROOM_NOT_FOUND', message: 'Sala não encontrada' };
@@ -550,18 +617,38 @@ export function punishPlayer(
     return { ok: false, code: 'NO_ROUND', message: 'Inicie uma rodada primeiro' };
   }
 
+  const config = { ...DEFAULT_BUZZER_ORDER_CONFIG, ...room.config };
+
+  // Punição por pontos: desconta na hora e não bloqueia a buzina.
+  if (config.penalty_type === 'points') {
+    const points = Math.max(0, config.penalty_points);
+    player.score_cache -= points;
+    touchRoom(roomId);
+    return {
+      ok: true,
+      penalty_type: 'points',
+      penalty: null,
+      points_subtracted: points,
+      new_score: player.score_cache,
+    };
+  }
+
   // Sem empilhamento: se já existe punição pendente/ativa, mantém a atual.
   const existing = getPlayerPenalty(roomId, userId, currentRound);
-  if (existing) return { ok: true, penalty: existing };
+  if (existing) {
+    return { ok: true, penalty_type: 'rounds', penalty: existing, points_subtracted: 0 };
+  }
 
+  const rounds = Math.max(1, duration ?? config.penalty_rounds);
   const start = currentRound + 1;
-  const until = currentRound + Math.max(1, duration);
+  const until = currentRound + rounds;
   player.penalty_start_round = start;
   player.penalty_until_round = until;
   touchRoom(roomId);
 
   return {
     ok: true,
+    penalty_type: 'rounds',
     penalty: {
       active: false,
       starts_next_round: true,
@@ -569,6 +656,7 @@ export function punishPlayer(
       start_round: start,
       until_round: until,
     },
+    points_subtracted: 0,
   };
 }
 
@@ -589,13 +677,18 @@ export function expirePlayerPenalties(roomId: string, atRound: number) {
 export function createRound(roomId: string, roundNumber: number, mediaUrl: string, correctAnswer: string): Round {
   const id = uuid();
   const now = new Date().toISOString();
-  const round: Round = { id, room_id: roomId, round_number: roundNumber, media_url: mediaUrl, correct_answer: correctAnswer, status: 'active', started_at: now, ended_at: null };
+  const round: Round = {
+    id, room_id: roomId, round_number: roundNumber, media_url: mediaUrl, correct_answer: correctAnswer,
+    status: 'active', started_at: now, ended_at: null,
+    answers_revealed: false, answers_graded: false, correct_option: null, eligible_player_ids: [],
+  };
   roundsMap.set(id, round);
   const ids = roomRoundsMap.get(roomId) ?? [];
   ids.push(id);
   roomRoundsMap.set(roomId, ids);
   expirePlayerPenalties(roomId, roundNumber);
   buzzersMap.set(id, []);
+  answersMap.set(id, []);
   touchRoom(roomId);
   return round;
 }
@@ -626,6 +719,15 @@ export function countRounds(roomId: string): number {
   return (roomRoundsMap.get(roomId) ?? []).length;
 }
 
+// Limite de rodadas configurado na sala (0 = sem limite).
+export function getRoundLimit(roomId: string): number {
+  return roomsMap.get(roomId)?.config.total_rounds ?? 0;
+}
+export function isRoundLimitReached(roomId: string): boolean {
+  const limit = getRoundLimit(roomId);
+  return limit > 0 && countRounds(roomId) >= limit;
+}
+
 // ─── Buzzer Events ───────────────────────────────────
 
 export function registerBuzz(roundId: string, playerId: string): BuzzerEvent | null {
@@ -646,6 +748,185 @@ export function getBuzzerOrder(roundId: string): (BuzzerEvent & { player_name: s
     ...e,
     player_name: usersById.get(e.player_id)?.name ?? e.player_id,
   }));
+}
+
+// ─── Answer Events ───────────────────────────────────
+
+// Snapshot dos jogadores que podem responder nesta rodada. Quem entra depois
+// do início da rodada fica de fora até a próxima.
+export function setRoundEligiblePlayers(roundId: string, playerIds: string[]) {
+  const round = roundsMap.get(roundId);
+  if (!round) return;
+  round.eligible_player_ids = Array.from(new Set(playerIds));
+  touchRoom(round.room_id);
+}
+
+export type RegisterAnswerResult =
+  | { ok: true; event: AnswerEvent }
+  | {
+      ok: false;
+      code: 'ROUND_NOT_FOUND' | 'ROUND_CLOSED' | 'REVEALED' | 'NOT_ELIGIBLE' | 'DUPLICATE' | 'INVALID_OPTION';
+      message: string;
+    };
+
+export function registerAnswer(
+  roundId: string,
+  playerId: string,
+  option: number,
+): RegisterAnswerResult {
+  const round = roundsMap.get(roundId);
+  if (!round) {
+    return { ok: false, code: 'ROUND_NOT_FOUND', message: 'Rodada não encontrada' };
+  }
+  if (round.status !== 'active') {
+    return { ok: false, code: 'ROUND_CLOSED', message: 'A rodada já foi encerrada' };
+  }
+  if (round.answers_revealed || round.answers_graded) {
+    return { ok: false, code: 'REVEALED', message: 'As respostas desta rodada já foram reveladas' };
+  }
+  if (!round.eligible_player_ids.includes(playerId)) {
+    return {
+      ok: false,
+      code: 'NOT_ELIGIBLE',
+      message: 'Você entrou após o início desta rodada. Aguarde a próxima.',
+    };
+  }
+  if (!Number.isInteger(option) || option < 1) {
+    return { ok: false, code: 'INVALID_OPTION', message: 'Alternativa inválida' };
+  }
+
+  const events = answersMap.get(roundId) ?? [];
+  if (events.some(e => e.player_id === playerId)) {
+    return {
+      ok: false,
+      code: 'DUPLICATE',
+      message: 'Você já respondeu esta rodada. A escolha não pode ser alterada.',
+    };
+  }
+
+  const event: AnswerEvent = {
+    id: uuid(),
+    round_id: roundId,
+    player_id: playerId,
+    option,
+    position: events.length + 1,
+    timestamp: new Date().toISOString(),
+  };
+  events.push(event);
+  answersMap.set(roundId, events);
+  touchRoom(round.room_id);
+  return { ok: true, event };
+}
+
+export function listRoundAnswers(roundId: string): AnswerEvent[] {
+  return (answersMap.get(roundId) ?? []).slice().sort((a, b) => a.position - b.position);
+}
+
+// Visão pública da ordem das respostas. O índice da alternativa fica oculto
+// (null) até o apresentador revelar a rodada.
+export function getAnswerOrder(roundId: string): AnswerView[] {
+  const round = roundsMap.get(roundId);
+  const reveal = round?.answers_revealed === true;
+  return listRoundAnswers(roundId).map(e => ({
+    id: e.id,
+    player_id: e.player_id,
+    player_name: usersById.get(e.player_id)?.name ?? e.player_id,
+    position: e.position,
+    option: reveal ? e.option : null,
+    timestamp: e.timestamp,
+    is_correct: reveal ? e.is_correct ?? null : null,
+    awarded_points: reveal ? e.awarded_points ?? null : null,
+  }));
+}
+
+export function revealRoundAnswers(roundId: string): boolean {
+  const round = roundsMap.get(roundId);
+  if (!round || round.answers_revealed || round.answers_graded) return false;
+  round.answers_revealed = true;
+  touchRoom(round.room_id);
+  return true;
+}
+
+export function isAcceptingAnswers(roundId: string): boolean {
+  const round = roundsMap.get(roundId);
+  return !!round && round.status === 'active' && !round.answers_revealed && !round.answers_graded;
+}
+
+// Revela automaticamente quando todos os jogadores elegíveis (e ainda na
+// sala) já responderam. Jogador offline continua contando: o apresentador
+// pode usar a revelação manual para não travar a partida.
+export function maybeRevealAnswers(roomId: string, roundId: string): boolean {
+  const round = roundsMap.get(roundId);
+  if (!round || round.room_id !== roomId || !isAcceptingAnswers(roundId)) return false;
+
+  const eligible = round.eligible_player_ids.filter(id => isActiveRoomMember(roomId, id));
+  if (eligible.length === 0) return false;
+
+  const answered = new Set(listRoundAnswers(roundId).map(e => e.player_id));
+  if (!eligible.every(id => answered.has(id))) return false;
+
+  return revealRoundAnswers(roundId);
+}
+
+export type GradeAnswersResult =
+  | { ok: true; correct_option: number; answers: AnswerView[] }
+  | {
+      ok: false;
+      code: 'ROUND_NOT_FOUND' | 'NOT_REVEALED' | 'ALREADY_GRADED' | 'INVALID_OPTION';
+      message: string;
+    };
+
+// Corrige a rodada: quem acertou primeiro recebe pointsFirst; os demais
+// acertos recebem pointsLater; erros não somam. Idempotente na prática: uma
+// segunda correção é recusada.
+export function gradeRoundAnswers(
+  roundId: string,
+  correctOption: number,
+  pointsFirst: number,
+  pointsLater: number,
+): GradeAnswersResult {
+  const round = roundsMap.get(roundId);
+  if (!round) {
+    return { ok: false, code: 'ROUND_NOT_FOUND', message: 'Rodada não encontrada' };
+  }
+  if (round.status !== 'active') {
+    return { ok: false, code: 'ROUND_NOT_FOUND', message: 'A rodada já foi encerrada' };
+  }
+  if (round.answers_graded) {
+    return { ok: false, code: 'ALREADY_GRADED', message: 'Esta rodada já foi corrigida' };
+  }
+  if (!round.answers_revealed) {
+    return { ok: false, code: 'NOT_REVEALED', message: 'Revele as respostas antes de corrigir' };
+  }
+  if (!Number.isInteger(correctOption) || correctOption < 1) {
+    return { ok: false, code: 'INVALID_OPTION', message: 'Alternativa correta inválida' };
+  }
+
+  const firstPoints = Math.max(0, Math.trunc(pointsFirst));
+  const laterPoints = Math.max(0, Math.trunc(pointsLater));
+
+  let firstCorrectSeen = false;
+  for (const answer of listRoundAnswers(roundId)) {
+    const correct = answer.option === correctOption;
+    let awarded = 0;
+    if (correct) {
+      awarded = firstCorrectSeen ? laterPoints : firstPoints;
+      firstCorrectSeen = true;
+    }
+    answer.is_correct = correct;
+    answer.awarded_points = awarded;
+
+    if (awarded !== 0) {
+      const player = roomPlayersMap.get(round.room_id)?.get(answer.player_id);
+      if (player) player.score_cache += awarded;
+    }
+  }
+
+  round.answers_graded = true;
+  round.correct_option = correctOption;
+  touchRoom(round.room_id);
+
+  return { ok: true, correct_option: correctOption, answers: getAnswerOrder(roundId) };
 }
 
 // ─── Scores ──────────────────────────────────────────
@@ -676,7 +957,13 @@ export function resetRoomGame(roomId: string) {
     }
   }
 
-  // Reset de rodadas
+  // Reset de rodadas (buzinas e respostas das rodadas antigas também somem)
+  const roundIds = roomRoundsMap.get(roomId) ?? [];
+  for (const roundId of roundIds) {
+    roundsMap.delete(roundId);
+    buzzersMap.delete(roundId);
+    answersMap.delete(roundId);
+  }
   roomRoundsMap.set(roomId, []);
   touchRoom(roomId);
 }

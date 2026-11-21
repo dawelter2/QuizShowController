@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-public.mjs",
     "lint": "tsc --noEmit",
-    "test": "npm run build && node tests/player-identity.test.mjs && node tests/penalty.test.mjs"
+    "test": "npm run build && node tests/player-identity.test.mjs && node tests/penalty.test.mjs && node tests/room-config.test.mjs && node tests/answers.test.mjs"
   },
   "engines": {
     "node": ">=20"

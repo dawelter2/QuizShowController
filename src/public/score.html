@@ -52,6 +52,8 @@
   #widget-ranking .rank-buzzer.armed .bz { background: #ff4444; border: 1px solid #ff7878; color: #fff; animation: armedPulse 1.2s ease-out infinite; }
   #widget-ranking .rank-buzzer.buzzed .bz { background: #00b894; border: 1px solid #00d4a8; color: #08130f; box-shadow: 0 0 14px rgba(0,184,148,.7); }
   #widget-ranking .rank-buzzer.punished .bz { background: rgba(214,48,49,.22); border: 1px solid #d63031; color: #ff7878; }
+  #widget-ranking .rank-buzzer.answer-hidden .bz { background: rgba(108,92,231,.22); border: 1px dashed #6c5ce7; color: #c8bdfb; }
+  #widget-ranking .rank-buzzer.answer-wrong .bz { background: rgba(214,48,49,.22); border: 1px solid #d63031; color: #ff7878; }
 
   /* Empty-slot: placeholder com mesma altura */
   #widget-ranking .rank-row.empty-slot { opacity: .35; }
@@ -239,10 +241,38 @@
   var status = document.getElementById('status');
   function log(m) { status.textContent = new Date().toLocaleTimeString() + ' ' + m; console.log('[SCORE]', m); }
   function esc(s) { var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+  function answerLabel(option) {
+    return answerOptionStyle === 'numeric'
+      ? String(option)
+      : String.fromCharCode(64 + option);
+  }
+  function resetAnswerState() {
+    answerByPid = {};
+    answersRevealed = false;
+    answersGraded = false;
+    correctOption = null;
+  }
+  function ingestAnswers(answers, revealed, graded, correct) {
+    answerByPid = {};
+    (answers || []).forEach(function(a){
+      if (a.option != null) answerByPid[a.player_id] = a.option;
+      buzzedOrderByPid[a.player_id] = a.position;
+      if (a.timestamp) buzzerTimestampsByPid[a.player_id] = a.timestamp;
+    });
+    answersRevealed = revealed === true;
+    answersGraded = graded === true;
+    correctOption = correct != null ? correct : null;
+  }
 
   var currentScores = [];
   var currentRoundNumber = null;
   var currentRoundActive = false;
+  var roomType = 'buzzer-order';
+  var answerOptionStyle = 'alpha';
+  var answerByPid = {};           // pid → alternativa (oculta até revelar)
+  var answersRevealed = false;
+  var answersGraded = false;
+  var correctOption = null;
   var buzzedOrderByPid = {};      // pid → posição (1,2,3,...)
   var buzzerTimestampsByPid = {}; // pid → timestamp ISO
   var lastDeltaByPid = {};        // pid → último delta de score (persiste até rodada:iniciada)
@@ -357,7 +387,7 @@
         deltaHtml = '<span class="rank-delta '+dcls+'">'+sign+delta+'</span>';
       }
 
-      // Punição por erro: 3 rodadas sem buzinar, sem alterar pontos.
+      // Punição por rodadas configurada na sala (punição por pontos não gera badge).
       var penalty = s.penalty;
       var penaltyHtml = penalty
         ? '<span class="rank-penalty" title="Punido: '+penalty.rounds_remaining+' rodada(s) sem buzinar">🚫 '+penalty.rounds_remaining+'</span>'
@@ -376,7 +406,33 @@
 
       var bzClass = 'neutral';
       var bzContent = '';
-      if (bzPos) {
+      if (roomType === 'answers') {
+        var chosen = answerByPid[s.player_id];
+        if (answersGraded && answersRevealed && chosen != null) {
+          if (chosen === correctOption) {
+            bzClass = 'buzzed';
+            bzContent = answerLabel(chosen);
+          } else {
+            bzClass = 'answer-wrong';
+            bzContent = '✗';
+          }
+        } else if (answersGraded && answersRevealed) {
+          bzClass = 'neutral';
+          bzContent = '—';
+        } else if (answersRevealed && chosen != null) {
+          bzClass = 'buzzed';
+          bzContent = answerLabel(chosen);
+        } else if (answersRevealed) {
+          bzClass = 'neutral';
+          bzContent = '—';
+        } else if (chosen != null || bzPos) {
+          bzClass = 'answer-hidden';
+          bzContent = '?';
+        } else if (currentRoundActive) {
+          bzClass = 'armed';
+          bzContent = '?';
+        }
+      } else if (bzPos) {
         bzClass = 'buzzed';
         bzContent = bzPos + 'º';
       } else if (penalty && penalty.active) {
@@ -460,6 +516,10 @@
 
     var roomTitle = data.room.title || 'Quiz Show';
     document.title = roomTitle + ' — Transmissão';
+    roomType = data.room.type === 'answers' ? 'answers' : 'buzzer-order';
+    if (roomType === 'answers') {
+      answerOptionStyle = (data.room.config && data.room.config.option_style === 'numeric') ? 'numeric' : 'alpha';
+    }
 
     log('Conectando...');
 
@@ -475,6 +535,7 @@
         buzzedOrderByPid = {};
         buzzerTimestampsByPid = {};
         lastDeltaByPid = {};
+        resetAnswerState();
         updateRoundLabel();
         renderModule();
         showRoundGo();
@@ -484,11 +545,13 @@
         currentRoundActive = false;
         buzzedOrderByPid = {};
         buzzerTimestampsByPid = {};
+        resetAnswerState();
         updateRoundLabel();
         renderModule();
       });
 
       socket.on('buzina:ordem', function(d){
+        if (roomType === 'answers') return;
         var order = d.order || [];
         buzzedOrderByPid = {};
         buzzerTimestampsByPid = {};
@@ -496,6 +559,24 @@
           buzzedOrderByPid[o.player_id] = o.position;
           if (o.timestamp) buzzerTimestampsByPid[o.player_id] = o.timestamp;
         });
+        renderModule();
+      });
+
+      socket.on('respostas:ordem', function(d){
+        if (roomType !== 'answers') return;
+        ingestAnswers(d.answers, d.answers_revealed, d.graded, d.correct_option);
+        renderModule();
+      });
+
+      socket.on('respostas:reveladas', function(d){
+        if (roomType !== 'answers') return;
+        ingestAnswers(d.answers, true, d.graded, d.correct_option);
+        renderModule();
+      });
+
+      socket.on('respostas:corrigidas', function(d){
+        if (roomType !== 'answers') return;
+        ingestAnswers(d.answers, true, true, d.correct_option);
         renderModule();
       });
 
@@ -507,6 +588,12 @@
       });
 
       socket.on('sala:status', function(d){
+        if (d.room && d.room.type) {
+          roomType = d.room.type === 'answers' ? 'answers' : 'buzzer-order';
+          if (roomType === 'answers') {
+            answerOptionStyle = (d.room.config && d.room.config.option_style === 'numeric') ? 'numeric' : 'alpha';
+          }
+        }
         if (d.scores) {
           // No primeiro status, semeia os "prev" para não disparar deltas falsos.
           if (Object.keys(prevDisplayedScores).length === 0) {
@@ -519,16 +606,27 @@
           currentRoundActive = (d.current_round.status === 'active');
           buzzedOrderByPid = {};
           buzzerTimestampsByPid = {};
-          (d.current_round.buzzer_order || []).forEach(function(o){
-            buzzedOrderByPid[o.player_id] = o.position;
-            if (o.timestamp) buzzerTimestampsByPid[o.player_id] = o.timestamp;
-          });
+          if (roomType === 'answers') {
+            ingestAnswers(
+              d.current_round.answers,
+              d.current_round.answers_revealed,
+              d.current_round.graded,
+              d.current_round.correct_option
+            );
+          } else {
+            resetAnswerState();
+            (d.current_round.buzzer_order || []).forEach(function(o){
+              buzzedOrderByPid[o.player_id] = o.position;
+              if (o.timestamp) buzzerTimestampsByPid[o.player_id] = o.timestamp;
+            });
+          }
         } else {
           currentRoundNumber = null;
           currentRoundActive = false;
           buzzedOrderByPid = {};
           buzzerTimestampsByPid = {};
           lastDeltaByPid = {}; // Limpa deltas no reset
+          resetAnswerState();
         }
         updateRoundLabel();
         renderModule();

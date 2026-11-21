@@ -30,10 +30,26 @@
   ];
 
   state.previewMode = true;
-  state.room = { id: 'demo-room', code: 'DEMO', title: 'CineQuiz — Exemplo' };
+  state.room = {
+    id: 'demo-room',
+    code: 'DEMO',
+    title: 'CineQuiz — Exemplo',
+    type: 'buzzer-order',
+    config: {
+      quiz_url: '',
+      total_rounds: 10,
+      points_exact: 3,
+      points_near: 1,
+      penalty_type: 'rounds',
+      penalty_rounds: 3,
+      penalty_points: 3,
+    },
+  };
   state.user = { id: 'demo-host', name: 'Mestre' };
   state.players = demoPlayers;
   state.currentRoundId = 'demo-round-' + DEMO_ROUND;
+  state.currentRoundNumber = DEMO_ROUND;
+  state.roundsPlayed = DEMO_ROUND;
   state.buzzerOrder = demoBuzzes;
   state.autoNextRound = false;
   state.judgedPlayers = new Set();
@@ -43,7 +59,7 @@
   $('pres-code').textContent = 'DEMO';
   $('pres-title').textContent = 'CineQuiz — Exemplo';
   $('pres-round-room-title').textContent = 'CineQuiz — Exemplo';
-  $('pres-round-num').textContent = String(DEMO_ROUND);
+  updateRoundDisplay(DEMO_ROUND);
   $('btn-round-control').textContent = '⏭ Próxima Rodada';
   $('btn-round-control').className = 'btn btn-warning';
   document.title = 'CineQuiz — Exemplo — Apresentador';
@@ -72,11 +88,17 @@
   `;
 
   function startDemoRound() {
+    if (roundsLimitReached()) {
+      toast('🏁 Fim! Todas as rodadas foram jogadas.');
+      return;
+    }
     state.currentRoundId = 'demo-round-' + Date.now();
     state.buzzerOrder = [];
     state.judgedPlayers.clear();
     const current = parseInt($('pres-round-num').textContent, 10) || 1;
     const newRound = current + 1;
+    state.currentRoundNumber = newRound;
+    state.roundsPlayed = newRound;
 
     // Simula o avanço da punição: 3, 2, 1 rodadas e depois libera.
     state.players.forEach(p => {
@@ -93,7 +115,7 @@
       }
     });
 
-    $('pres-round-num').textContent = String(newRound);
+    updateRoundDisplay(newRound);
     updateRoundButton(true);
     renderBuzzerOrder([]);
     renderPresenterPlayers(state.players);
@@ -101,13 +123,20 @@
   }
 
   // Substitui os handlers reais no modo de exemplo.
-  window.changeScore = function (playerId, delta) {
+  window.changeScore = function (playerId, judgment) {
     if (!state.currentRoundId) return toast('Inicie uma rodada primeiro');
 
     if (state.buzzerOrder.some(o => o.player_id === playerId)) {
       state.judgedPlayers.add(playerId);
       renderBuzzerOrderList();
     }
+
+    const cfg = roomConfig();
+    const delta = judgment === 'exact'
+      ? cfg.points_exact
+      : judgment === 'near'
+        ? cfg.points_near
+        : Number(judgment) || 0;
 
     const player = state.players?.find(p => p.user_id === playerId);
     if (player) {
@@ -116,31 +145,45 @@
       renderPresenterPlayers(state.players);
     }
 
-    if (state.autoNextRound) startDemoRound();
+    maybeAutoAdvanceRound();
   };
 
-  // Simula a punição de 3 rodadas sem socket.
+  // Simula a punição configurada na sala, sem socket.
   window.punishPlayer = function (playerId) {
     if (!state.currentRoundId) return toast('Inicie uma rodada primeiro');
 
     const player = state.players?.find(p => p.user_id === playerId);
     if (!player) return;
+
+    const cfg = roomConfig();
+    const current = parseInt($('pres-round-num').textContent, 10) || 1;
+
+    if (cfg.penalty_type === 'points') {
+      player.score_cache -= cfg.penalty_points;
+      state.prevScoresByPid[playerId] = player.score_cache;
+      state.judgedPlayers.add(playerId);
+      renderPresenterPlayers(state.players);
+      renderBuzzerOrderList();
+      toast(`${player.name} errou: −${cfg.penalty_points} ponto(s)`);
+      maybeAutoAdvanceRound();
+      return;
+    }
+
     if (player.penalty) return toast(`${player.name} já está cumprindo punição`);
 
-    const current = parseInt($('pres-round-num').textContent, 10) || 1;
     player.penalty = {
       active: false,
       starts_next_round: true,
-      rounds_remaining: 3,
+      rounds_remaining: cfg.penalty_rounds,
       start_round: current + 1,
-      until_round: current + 3,
+      until_round: current + cfg.penalty_rounds,
     };
     state.judgedPlayers.add(playerId);
     renderPresenterPlayers(state.players);
     renderBuzzerOrderList();
-    toast(`${player.name} punido: 3 rodadas sem buzinar`);
+    toast(`${player.name} punido: ${cfg.penalty_rounds} rodada(s) sem buzinar`);
 
-    if (state.autoNextRound) startDemoRound();
+    maybeAutoAdvanceRound();
   };
 
   window.handleRemovePlayer = function (userId) {
@@ -172,7 +215,9 @@
     state.buzzerOrder = [];
     state.judgedPlayers.clear();
     state.currentRoundId = 'demo-round-1';
-    $('pres-round-num').textContent = '1';
+    state.currentRoundNumber = 1;
+    state.roundsPlayed = 1;
+    updateRoundDisplay(1);
     updateRoundButton(true);
     renderPresenterPlayers(state.players);
     renderBuzzerOrder([]);

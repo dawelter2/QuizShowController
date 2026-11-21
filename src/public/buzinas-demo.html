@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cenário de teste — Ordem das Buzinas</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #e0e0e0; min-height: 100vh; }
+  input, button, select { font: inherit; }
+  button { -webkit-tap-highlight-color: transparent; }
+  .hidden { display: none !important; }
+  h1 { font-size: 1.35rem; color: #fff; }
+  h2 { font-size: 1rem; color: #c8c8dc; margin-bottom: .6rem; }
+  h3 { font-size: .78rem; color: #a0a0b8; text-transform: uppercase; letter-spacing: .07em; margin: 1rem 0 .5rem; }
+  p { color: #888; }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .7rem 1rem; background: #1a1a2e; border-bottom: 1px solid #2a2a3e; flex-wrap: wrap; }
+  .topbar .badges { display: flex; gap: .4rem; flex-wrap: wrap; }
+  .badge { display: inline-flex; align-items: center; padding: .3rem .65rem; border-radius: 6px; font-size: .75rem; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+  .badge-outline { background: #16162a; border: 1px solid #2a2a3e; color: #a0a0b8; }
+  .badge-primary { background: #6c5ce7; color: #fff; }
+  .badge-open { background: #00b894; color: #fff; }
+  .badge-closed { background: #fdcb6e; color: #1a1a2e; }
+
+  .layout { display: grid; grid-template-columns: minmax(360px, 1fr) minmax(420px, 1.15fr); gap: 1rem; padding: 1rem; max-width: 1500px; margin: 0 auto; align-items: start; }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+
+  .card { background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
+  .setup-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; margin: .4rem 0 .8rem; }
+  .field { display: flex; flex-direction: column; gap: .25rem; }
+  .field label { font-size: .72rem; font-weight: 700; color: #a0a0b8; }
+  .field input, .field select { width: 100%; padding: .55rem .6rem; border-radius: 8px; border: 1px solid #2a2a3e; background: #16162a; color: #e0e0e0; outline: none; }
+  .field input:focus, .field select:focus { border-color: #6c5ce7; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; border: none; border-radius: 8px; padding: .6rem 1rem; font-weight: 700; font-size: .85rem; cursor: pointer; transition: filter .15s, transform .15s; }
+  .btn:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
+  .btn:disabled { opacity: .42; cursor: not-allowed; filter: none; transform: none; }
+  .btn-primary { background: #6c5ce7; color: #fff; }
+  .btn-success { background: #00b894; color: #fff; }
+  .btn-warning { background: #fdcb6e; color: #1a1a2e; }
+  .btn-outline { background: transparent; border: 1px solid #2a2a3e; color: #a0a0b8; }
+  .btn-block { width: 100%; }
+  .actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+  .actions .btn { flex: 1 1 140px; }
+
+  .host-head { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .5rem; }
+  .room-code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 1.5rem; font-weight: 900; color: #6c5ce7; }
+  .toggle-row { display: flex; align-items: center; gap: .5rem; margin-top: .7rem; font-size: .8rem; color: #a0a0b8; font-weight: 700; }
+  .toggle-row input { width: 18px; height: 18px; accent-color: #6c5ce7; }
+  .host-meta { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .6rem; }
+  .host-meta .hint { margin: 0; }
+
+  .buzz-row { display: flex; align-items: center; gap: .45rem; padding: .4rem .5rem; margin-bottom: .3rem; border: 1px solid #2a2a3e; border-radius: 8px; background: #232342; }
+  .buzz-row:last-child { margin-bottom: 0; }
+  .buzz-row.first { border-color: #fdcb6e; background: linear-gradient(90deg, rgba(253,203,110,.16), #232342); }
+  .buzz-pos { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: #6c5ce7; color: #fff; font-size: .72rem; font-weight: 900; }
+  .buzz-row.first .buzz-pos { background: #fdcb6e; color: #1a1a2e; }
+  .buzz-name { flex: 1; min-width: 0; font-size: .95rem; font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .buzz-time { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: .7rem; font-weight: 700; color: #a29bfe; white-space: nowrap; }
+  .buzz-actions { display: flex; gap: .22rem; flex-shrink: 0; }
+  .buzz-actions button { min-width: 30px; height: 28px; border-radius: 5px; border: none; cursor: pointer; font-weight: 800; font-size: .68rem; padding: 0 .3rem; }
+  .btn-plus { background: #00b894; color: #fff; }
+  .btn-punish { background: #d63031; color: #fff; }
+  .buzz-actions .btn-dismiss { background: transparent; border: 1px solid #3a3a52; color: #8a8aa0; }
+  .buzz-actions .btn-dismiss:hover { background: #2f2f4a; border-color: #636e72; color: #dfe6e9; }
+  .panel-empty { color: #636e72; font-size: .82rem; padding: .35rem 0; }
+
+  .summary-row { display: flex; align-items: center; gap: .45rem; padding: .32rem .45rem; border-bottom: 1px solid #232342; font-size: .82rem; }
+  .summary-row:last-child { border-bottom: none; }
+  .summary-pos { width: 22px; color: #a0a0b8; font-weight: 800; flex-shrink: 0; }
+  .summary-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .summary-chip { flex-shrink: 0; padding: .12rem .4rem; border-radius: 5px; font-size: .68rem; font-weight: 800; background: #16162a; border: 1px solid #3a3a52; color: #8a8aa0; }
+  .summary-chip.win { color: #2ee5a8; border-color: rgba(0,184,148,.55); }
+  .summary-chip.loss { color: #ff7878; border-color: rgba(214,48,49,.55); }
+  .summary-chip.pending { color: #a29bfe; border-style: dashed; }
+
+  .score-list { display: flex; flex-direction: column; gap: .3rem; }
+  .score-row { display: flex; align-items: center; gap: .5rem; padding: .35rem .5rem; border-radius: 6px; background: #16162a; font-size: .85rem; }
+  .score-row .pos { width: 24px; text-align: center; font-weight: 800; color: #a0a0b8; flex-shrink: 0; }
+  .score-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .score-row .score { color: #fdcb6e; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .score-penalty { padding: .08rem .4rem; border-radius: 999px; background: rgba(214,48,49,.2); border: 1px solid rgba(214,48,49,.55); color: #ff7878; font-size: .66rem; font-weight: 800; white-space: nowrap; }
+
+  .players-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .6rem; }
+  .phones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+  @media (max-width: 560px) { .phones { grid-template-columns: 1fr; } .setup-grid { grid-template-columns: 1fr; } }
+
+  .phone { background: linear-gradient(180deg, #1d1d36, #15152a); border: 1px solid #2a2a3e; border-radius: 18px; padding: .7rem; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+  .phone.active { border-color: rgba(108,92,231,.55); }
+  .phone.buzzed { border-color: rgba(253,203,110,.65); }
+  .phone.punished { border-color: rgba(214,48,49,.6); }
+  .phone.judged { border-color: rgba(0,184,148,.5); }
+  .phone-head { display: flex; align-items: center; justify-content: space-between; gap: .4rem; margin-bottom: .35rem; }
+  .phone-name { font-weight: 800; font-size: .9rem; color: #fff; }
+  .phone-score { color: #fdcb6e; font-weight: 900; font-size: .95rem; }
+
+  .buzzer-wrap { display: flex; justify-content: center; padding: .25rem 0 .15rem; }
+  .buzzer-btn { position: relative; width: 112px; height: 112px; border-radius: 50%; border: none; font-size: 1.9rem; font-weight: 900; cursor: pointer; background: #2d2d2d; color: #636e72; transition: background .15s, box-shadow .15s, transform .1s; user-select: none; touch-action: manipulation; }
+  .buzzer-btn:not(:disabled):active { transform: scale(.95); }
+  .buzzer-btn.active { background: #d63031; color: #fff; box-shadow: 0 0 30px rgba(214,48,49,.45); animation: buzzerPulse 1.2s ease-in-out infinite; }
+  .buzzer-btn.available { box-shadow: 0 0 0 3px rgba(253,203,110,.35), 0 0 32px rgba(214,48,49,.5); }
+  .buzzer-btn.pressed { background: #fdcb6e; color: #1a1a2e; }
+  .buzzer-btn.registering { background: #6c5ce7; color: #fff; }
+  .buzzer-btn.punished { background: #3a1a1a; color: #ff7675; box-shadow: inset 0 0 0 4px rgba(214,48,49,.35); }
+  .buzzer-btn:disabled { cursor: default; }
+  .buzzer-pos-badge { position: absolute; top: 2px; right: 2px; width: 34px; height: 34px; border-radius: 50%; background: #6c5ce7; color: #fff; display: flex; align-items: center; justify-content: center; font-size: .82rem; font-weight: 900; box-shadow: 0 2px 8px rgba(0,0,0,.4); border: 2px solid #fff; transform: scale(0); transition: transform .3s cubic-bezier(.175,.885,.32,1.275); }
+  .buzzer-pos-badge.show { transform: scale(1); }
+  @keyframes buzzerPulse {
+    0%, 100% { box-shadow: 0 0 26px rgba(214,48,49,.4); }
+    50% { box-shadow: 0 0 48px rgba(214,48,49,.9); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .buzzer-btn.active { animation: none; box-shadow: 0 0 0 3px rgba(214,48,49,.65), 0 0 30px rgba(214,48,49,.5); }
+  }
+
+  .penalty-banner { margin: .3rem 0; padding: .3rem .45rem; border-radius: 6px; background: rgba(214,48,49,.14); border: 1px solid rgba(214,48,49,.5); color: #ff7878; font-size: .68rem; font-weight: 800; text-align: center; }
+  .phone-status { margin-top: .4rem; font-size: .68rem; color: #8a8aa0; line-height: 1.35; min-height: 2.4em; }
+  .phone-result { margin-top: .35rem; border-radius: 8px; padding: .35rem .45rem; font-size: .72rem; font-weight: 800; text-align: center; }
+  .phone-result.correct { background: rgba(0,184,148,.15); border: 1px solid rgba(0,184,148,.55); color: #2ee5a8; }
+  .phone-result.wrong { background: rgba(214,48,49,.15); border: 1px solid rgba(214,48,49,.55); color: #ff7878; }
+  .phone-result.neutral { background: #16162a; border: 1px solid #2a2a3e; color: #a0a0b8; }
+
+  .phone-order { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .35rem; }
+  .phone-order .chip { padding: .12rem .35rem; border-radius: 5px; background: #16162a; border: 1px solid #2a2a3e; font-size: .64rem; color: #a0a0b8; }
+  .phone-order .chip.me { border-color: #fdcb6e; color: #fdcb6e; font-weight: 800; }
+
+  .log { margin-top: 1rem; border-top: 1px solid #2a2a3e; padding-top: .5rem; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: .65rem; color: #636e72; max-height: 140px; overflow-y: auto; white-space: pre-wrap; }
+  .hint { font-size: .75rem; color: #8a8aa0; line-height: 1.45; }
+  .toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); background: #1a1a2e; border: 1px solid #2a2a3e; padding: .65rem 1.25rem; border-radius: 8px; font-size: .85rem; z-index: 100; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>🧪 Cenário de teste — Ordem das Buzinas</h1>
+    <p class="hint">Sala real no servidor: 1 apresentador + 4 jogadores simulados. Clique nas buzinas dos celulares.</p>
+  </div>
+  <div class="badges">
+    <span class="badge badge-outline" id="top-room">sala —</span>
+    <span class="badge badge-outline" id="top-round">rodada —</span>
+    <span class="badge badge-outline" id="top-state">aguardando</span>
+    <a class="btn btn-outline" href="/" style="text-decoration:none;">Voltar ao site</a>
+  </div>
+</div>
+
+<main class="layout">
+  <section>
+    <div class="card">
+      <h2>1. Configure o cenário</h2>
+      <div class="setup-grid">
+        <div class="field">
+          <label for="cfg-rounds">Número de rodadas (0 = sem limite)</label>
+          <input type="number" id="cfg-rounds" min="0" max="200" step="1" value="0">
+        </div>
+        <div class="field">
+          <label for="cfg-exact">Pontos para o acerto certeiro</label>
+          <input type="number" id="cfg-exact" min="1" max="100" step="1" value="3">
+        </div>
+        <div class="field">
+          <label for="cfg-near">Pontos para o quase</label>
+          <input type="number" id="cfg-near" min="0" max="100" step="1" value="1">
+        </div>
+        <div class="field">
+          <label for="cfg-penalty-type">Tipo de punição por erro</label>
+          <select id="cfg-penalty-type">
+            <option value="rounds">Rodadas sem buzinar</option>
+            <option value="points">Subtrair pontos</option>
+          </select>
+        </div>
+        <div class="field" id="field-penalty-rounds">
+          <label for="cfg-penalty-rounds">Rodadas de punição</label>
+          <input type="number" id="cfg-penalty-rounds" min="1" max="50" step="1" value="3">
+        </div>
+        <div class="field hidden" id="field-penalty-points">
+          <label for="cfg-penalty-points">Pontos a subtrair</label>
+          <input type="number" id="cfg-penalty-points" min="0" max="100" step="1" value="3">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" id="btn-new">🔄 Criar novo cenário</button>
+      <p class="hint" id="setup-status" style="margin-top:.5rem;">Criando sala de teste…</p>
+    </div>
+
+    <div class="card">
+      <div class="host-head">
+        <div>
+          <h2 style="margin:0;">2. Painel do apresentador</h2>
+          <p class="hint">O componente abaixo reproduz a tela real do host.</p>
+        </div>
+        <span class="room-code" id="host-code">—</span>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-success btn-block" id="btn-round" disabled>▶ Começar rodada</button>
+      </div>
+      <label class="toggle-row">
+        <input type="checkbox" id="toggle-auto">
+        Auto-próxima rodada (avança quando a lista esvaziar)
+      </label>
+      <div class="host-meta">
+        <span class="badge badge-outline" id="host-round">rodada —</span>
+        <span class="hint" id="host-limit">sem limite de rodadas</span>
+      </div>
+
+      <h3>⚡ Ordem dos botões</h3>
+      <div id="buzz-order"><p class="panel-empty">Aguardando o início da rodada.</p></div>
+
+      <h3>Cliques da rodada</h3>
+      <div id="buzz-summary"><p class="panel-empty">Nenhum clique nesta rodada.</p></div>
+
+      <h3>🏆 Placar</h3>
+      <div class="score-list" id="score-list"></div>
+
+      <div class="log" id="log"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="players-head">
+      <div>
+        <h2 style="margin:0;">3. Celulares dos jogadores</h2>
+        <p class="hint">Cada jogador tem uma buzina. Quem aperta primeiro fica em 1º; o servidor ordena os cliques.</p>
+      </div>
+    </div>
+    <div class="phones" id="phones"></div>
+  </section>
+</main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/common.js"></script>
+<script>
+(function () {
+  const PLAYER_NAMES = ['Ana', 'Bob', 'Carol', 'David'];
+
+  const demo = {
+    room: null,
+    host: null,
+    players: [],
+    hostSocket: null,
+    hostReady: false,
+    activeRound: null,
+    order: [],
+    judged: new Set(),
+    decisions: {},
+    autoNext: false,
+    starting: false,
+    advancing: false,
+    config: { rounds: 0, exact: 3, near: 1, penaltyType: 'rounds', penaltyRounds: 3, penaltyPoints: 3 },
+    scores: {},
+    roundsPlayed: 0,
+    // Muda a cada cenário criado; timers agendados pelo anterior são ignorados.
+    scenarioId: 0,
+  };
+
+  // ─── Utilidades ──────────────────────────────────
+
+  function log(msg) {
+    const el = $('log');
+    if (!el) return;
+    const line = new Date().toLocaleTimeString() + '  ' + msg;
+    el.textContent = line + '\n' + el.textContent;
+    console.log('[BUZINAS DEMO]', msg);
+  }
+
+  function setSetupStatus(text) {
+    const el = $('setup-status');
+    if (el) el.textContent = text;
+  }
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, Number(value) || min));
+  }
+
+  function configFromForm() {
+    return {
+      rounds: clamp($('cfg-rounds').value, 0, 200),
+      exact: clamp($('cfg-exact').value, 1, 100),
+      near: clamp($('cfg-near').value, 0, 100),
+      penaltyType: $('cfg-penalty-type').value === 'points' ? 'points' : 'rounds',
+      penaltyRounds: clamp($('cfg-penalty-rounds').value, 1, 50),
+      penaltyPoints: clamp($('cfg-penalty-points').value, 0, 100),
+    };
+  }
+
+  // Configuração efetiva: a sala criada manda; o formulário é o fallback.
+  function roomCfg() {
+    const cfg = demo.room && demo.room.config ? demo.room.config : null;
+    if (!cfg) {
+      return {
+        total_rounds: demo.config.rounds,
+        points_exact: demo.config.exact,
+        points_near: demo.config.near,
+        penalty_type: demo.config.penaltyType,
+        penalty_rounds: demo.config.penaltyRounds,
+        penalty_points: demo.config.penaltyPoints,
+      };
+    }
+    return {
+      total_rounds: Number(cfg.total_rounds) || 0,
+      points_exact: Number(cfg.points_exact) || 0,
+      points_near: Number(cfg.points_near) || 0,
+      penalty_type: cfg.penalty_type === 'points' ? 'points' : 'rounds',
+      penalty_rounds: Number(cfg.penalty_rounds) || 0,
+      penalty_points: Number(cfg.penalty_points) || 0,
+    };
+  }
+
+  function limitReached() {
+    const limit = roomCfg().total_rounds;
+    return limit > 0 && demo.roundsPlayed >= limit;
+  }
+
+  function scoreOf(player) {
+    return demo.scores[player.id] ?? player.score ?? 0;
+  }
+
+  function sortedOrder() {
+    return (demo.order || []).slice().sort((a, b) => a.position - b.position);
+  }
+
+  // Só os cliques que ainda esperam uma decisão do apresentador.
+  function pendingOrder() {
+    const activeIds = new Set(demo.players.map(p => p.id));
+    const punishedIds = new Set(demo.players.filter(p => p.penalty).map(p => p.id));
+    return sortedOrder().filter(entry =>
+      !demo.judged.has(entry.player_id) &&
+      !punishedIds.has(entry.player_id) &&
+      activeIds.has(entry.player_id)
+    );
+  }
+
+  function firstTimestamp() {
+    const entry = sortedOrder().find(o => o.timestamp);
+    return entry ? new Date(entry.timestamp).getTime() : null;
+  }
+
+  function deltaLabel(entry, baseTs) {
+    if (!baseTs || !entry.timestamp) return '';
+    const diff = (new Date(entry.timestamp).getTime() - baseTs) / 1000;
+    return diff > 0.0005 ? '+' + diff.toFixed(3) + 's' : '';
+  }
+
+  function decisionChip(playerId) {
+    const decision = demo.decisions[playerId];
+    if (!decision) return '<span class="summary-chip pending">aguardando</span>';
+    if (decision.kind === 'exact' || decision.kind === 'near') {
+      return '<span class="summary-chip win">+' + decision.points + '</span>';
+    }
+    if (decision.kind === 'dismiss') {
+      return '<span class="summary-chip">✕</span>';
+    }
+    if (decision.penaltyType === 'points') {
+      return '<span class="summary-chip loss">−' + decision.points + '</span>';
+    }
+    return '<span class="summary-chip loss">🚫 ' + decision.rounds + '</span>';
+  }
+
+  // ─── Sincronização de estado ─────────────────────
+
+  function applyScores(scores) {
+    if (!Array.isArray(scores)) return;
+    demo.scores = {};
+    for (const row of scores) {
+      demo.scores[row.player_id] = row.score;
+      const player = demo.players.find(p => p.id === row.player_id);
+      if (player) {
+        player.score = row.score;
+        if (row.penalty !== undefined) player.penalty = row.penalty;
+      }
+    }
+  }
+
+  function applyPlayers(players) {
+    if (!Array.isArray(players)) return;
+    for (const row of players) {
+      const player = demo.players.find(p => p.id === row.user_id);
+      if (!player) continue;
+      player.penalty = row.penalty || null;
+      if (typeof row.score_cache === 'number') {
+        player.score = row.score_cache;
+        demo.scores[player.id] = row.score_cache;
+      }
+      if (typeof row.name === 'string') player.name = row.name;
+    }
+  }
+
+  function applyRound(round) {
+    const sameRound = demo.activeRound && demo.activeRound.id === round.id;
+    demo.activeRound = { id: round.id, number: round.round_number };
+    demo.roundsPlayed = Math.max(demo.roundsPlayed, Number(round.round_number) || 0);
+    demo.order = Array.isArray(round.buzzer_order) ? round.buzzer_order : demo.order;
+    if (!sameRound) {
+      demo.judged.clear();
+      demo.decisions = {};
+      demo.players.forEach(p => { p.buzzing = false; });
+    }
+    demo.starting = false;
+    demo.advancing = false;
+  }
+
+  function clearRound() {
+    demo.activeRound = null;
+    demo.order = [];
+    demo.judged.clear();
+    demo.decisions = {};
+    demo.starting = false;
+    demo.advancing = false;
+    demo.players.forEach(p => { p.buzzing = false; });
+  }
+
+  // ─── Eventos do servidor ─────────────────────────
+
+  function applyStatus(data) {
+    if (!data) return;
+    if (data.room) demo.room = { ...demo.room, ...data.room };
+    if (Array.isArray(data.scores)) applyScores(data.scores);
+    if (Array.isArray(data.players)) applyPlayers(data.players);
+    if (typeof data.rounds_played === 'number') {
+      demo.roundsPlayed = Math.max(demo.roundsPlayed, data.rounds_played);
+    }
+    if (data.current_round) applyRound(data.current_round);
+    else clearRound();
+    renderAll();
+  }
+
+  function onRoundStarted(data) {
+    demo.activeRound = { id: data.round_id, number: data.round_number };
+    demo.roundsPlayed = Math.max(demo.roundsPlayed, Number(data.round_number) || 0);
+    demo.order = [];
+    demo.judged.clear();
+    demo.decisions = {};
+    demo.starting = false;
+    demo.advancing = false;
+
+    // O status completo ainda vem depois; aqui já deixamos os punidos
+    // bloqueados para o clique não ser liberado por um instante.
+    demo.players.forEach(p => { p.buzzing = false; p.penalty = null; });
+    for (const punishment of data.punishments || []) {
+      const player = demo.players.find(p => p.id === punishment.player_id);
+      if (player) {
+        player.penalty = {
+          active: true,
+          starts_next_round: false,
+          rounds_remaining: punishment.rounds_remaining,
+        };
+      }
+    }
+
+    log('Rodada ' + data.round_number + ' iniciada (buzinas liberadas).');
+    renderAll();
+  }
+
+  function onBuzzerOrder(data) {
+    if (!demo.activeRound || !data || data.round_id !== demo.activeRound.id) return;
+    const before = new Set((demo.order || []).map(o => o.player_id));
+    demo.order = Array.isArray(data.order) ? data.order : [];
+    demo.players.forEach(p => { p.buzzing = false; });
+
+    const added = demo.order
+      .filter(entry => !before.has(entry.player_id))
+      .sort((a, b) => a.position - b.position);
+    for (const entry of added) {
+      log((entry.player_name || 'Jogador') + ' apertou a buzina (' + entry.position + 'º).');
+    }
+    renderAll();
+  }
+
+  function onPunished(data) {
+    if (!data) return;
+    const player = demo.players.find(p => p.id === data.player_id);
+    if (player) {
+      demo.judged.add(player.id);
+      if (data.penalty_type === 'points') {
+        demo.decisions[player.id] = {
+          kind: 'punish',
+          penaltyType: 'points',
+          points: data.points_subtracted,
+        };
+        if (typeof data.new_score === 'number') {
+          demo.scores[player.id] = data.new_score;
+          player.score = data.new_score;
+        }
+        log(player.name + ' errou: −' + data.points_subtracted + ' ponto(s).');
+        toast(player.name + ' errou: −' + data.points_subtracted + ' ponto(s)');
+      } else {
+        demo.decisions[player.id] = {
+          kind: 'punish',
+          penaltyType: 'rounds',
+          rounds: data.duration_rounds,
+        };
+        player.penalty = {
+          active: false,
+          starts_next_round: true,
+          rounds_remaining: data.rounds_remaining ?? data.duration_rounds,
+          start_round: data.start_round,
+          until_round: data.start_round != null
+            ? data.start_round + (data.duration_rounds || 1) - 1
+            : undefined,
+        };
+        log(player.name + ' punido: ' + data.duration_rounds + ' rodada(s) sem buzinar.');
+        toast(player.name + ' punido: ' + data.duration_rounds + ' rodada(s) sem buzinar');
+      }
+    }
+    renderAll();
+    maybeAutoAdvance();
+  }
+
+  function onRoundClosed() {
+    clearRound();
+    log('Rodada encerrada.');
+    renderAll();
+
+    if (limitReached()) {
+      log('Limite de rodadas atingido.');
+      toast('🏁 Fim! Todas as rodadas foram jogadas.');
+      return;
+    }
+    // Mesmo comportamento do host real: a próxima rodada começa sozinha.
+    const scenario = demo.scenarioId;
+    setTimeout(() => {
+      if (scenario !== demo.scenarioId) return;
+      startRound();
+    }, 500);
+  }
+
+  // ─── Ações do host ───────────────────────────────
+
+  function startRound() {
+    if (!demo.hostSocket || !demo.hostReady || demo.activeRound || demo.starting) return;
+    if (limitReached()) {
+      toast('Todas as rodadas já foram jogadas. Crie um novo cenário.');
+      renderHost();
+      return;
+    }
+
+    demo.starting = true;
+    demo.hostSocket.emit('rodada:iniciar', {
+      room_id: demo.room.id,
+      media_url: '',
+      correct_answer: '',
+    });
+    renderHost();
+
+    // Se o servidor recusar (ex.: limite), libera o botão de novo.
+    const scenario = demo.scenarioId;
+    setTimeout(() => {
+      if (scenario !== demo.scenarioId) return;
+      if (!demo.activeRound && demo.starting) {
+        demo.starting = false;
+        renderHost();
+      }
+    }, 3000);
+  }
+
+  function requestNextRound() {
+    if (!demo.hostSocket || !demo.activeRound || demo.advancing) return;
+    demo.advancing = true;
+    demo.hostSocket.emit('rodada:proxima', {
+      room_id: demo.room.id,
+      round_id: demo.activeRound.id,
+    });
+    renderHost();
+
+    const scenario = demo.scenarioId;
+    setTimeout(() => {
+      if (scenario !== demo.scenarioId) return;
+      if (demo.activeRound && demo.advancing) {
+        demo.advancing = false;
+        renderHost();
+      }
+    }, 3000);
+  }
+
+  function handleRoundButton() {
+    if (demo.activeRound) requestNextRound();
+    else startRound();
+  }
+
+  function changeScore(playerId, judgment) {
+    if (!demo.hostSocket || !demo.hostReady) return toast('Apresentador desconectado');
+    if (!demo.activeRound) return toast('Inicie uma rodada primeiro');
+    if (demo.judged.has(playerId)) return;
+
+    const points = judgment === 'near' ? roomCfg().points_near : roomCfg().points_exact;
+    demo.judged.add(playerId);
+    demo.decisions[playerId] = { kind: judgment, points };
+    demo.hostSocket.emit('pontos:alterar', {
+      room_id: demo.room.id,
+      round_id: demo.activeRound.id,
+      player_id: playerId,
+      judgment,
+    });
+    const player = demo.players.find(p => p.id === playerId);
+    log((player?.name || 'Jogador') + ' recebeu +' + points + ' ponto(s).');
+    renderAll();
+    maybeAutoAdvance();
+  }
+
+  function punishPlayer(playerId) {
+    if (!demo.hostSocket || !demo.hostReady) return toast('Apresentador desconectado');
+    if (!demo.activeRound) return toast('Inicie uma rodada primeiro');
+
+    const player = demo.players.find(p => p.id === playerId);
+    if (player?.penalty) return toast((player?.name || 'Jogador') + ' já está cumprindo punição');
+
+    demo.hostSocket.emit('jogador:punir', {
+      room_id: demo.room.id,
+      round_id: demo.activeRound.id,
+      player_id: playerId,
+    }, (res) => {
+      if (!res || !res.ok) toast((res && res.error) || 'Não foi possível aplicar a punição');
+    });
+  }
+
+  function dismissPlayer(playerId) {
+    if (!demo.activeRound) return toast('Inicie uma rodada primeiro');
+    const entry = (demo.order || []).find(o => o.player_id === playerId);
+    if (!entry || demo.judged.has(playerId)) return;
+
+    demo.judged.add(playerId);
+    demo.decisions[playerId] = { kind: 'dismiss' };
+    log((entry.player_name || 'Jogador') + ' saiu da lista sem pontos nem punição.');
+    toast((entry.player_name || 'Jogador') + ' saiu da lista sem pontos nem punição.');
+    renderAll();
+    maybeAutoAdvance();
+  }
+
+  // Com o auto-próxima ligado, avança quando ninguém mais espera decisão.
+  function maybeAutoAdvance() {
+    if (!demo.autoNext || !demo.activeRound || demo.advancing) return;
+    if (pendingOrder().length > 0) return;
+    const scenario = demo.scenarioId;
+    setTimeout(() => {
+      if (scenario !== demo.scenarioId) return;
+      if (demo.autoNext && demo.activeRound && !demo.advancing && pendingOrder().length === 0) {
+        requestNextRound();
+      }
+    }, 700);
+  }
+
+  function playerBuzz(playerId) {
+    const player = demo.players.find(p => p.id === playerId);
+    if (!player || !demo.activeRound || !demo.hostReady) return;
+    if (player.penalty?.active) return toast(player.name + ' está punido nesta rodada');
+    if (player.buzzing) return;
+    if (demo.order.some(entry => entry.player_id === player.id)) return;
+    if (!player.socket) return;
+
+    // Trava o clique até o servidor devolver a ordem (posição oficial).
+    player.buzzing = true;
+    renderPhones();
+    player.socket.emit('buzina:apertar', {
+      room_id: demo.room.id,
+      round_id: demo.activeRound.id,
+      player_id: player.id,
+    });
+
+    const scenario = demo.scenarioId;
+    setTimeout(() => {
+      if (scenario !== demo.scenarioId) return;
+      if (player.buzzing) {
+        player.buzzing = false;
+        renderPhones();
+      }
+    }, 3000);
+  }
+
+  // ─── Render ──────────────────────────────────────
+
+  function renderTopBadges() {
+    $('top-room').textContent = demo.room ? 'sala ' + demo.room.code : 'sala —';
+    $('top-round').textContent = demo.activeRound ? 'rodada ' + demo.activeRound.number : 'rodada —';
+
+    const stateEl = $('top-state');
+    if (!demo.activeRound) {
+      stateEl.textContent = 'aguardando';
+      stateEl.className = 'badge badge-outline';
+    } else if (demo.order.length > 0 && pendingOrder().length === 0) {
+      stateEl.textContent = 'julgando';
+      stateEl.className = 'badge badge-closed';
+    } else {
+      stateEl.textContent = 'buzinas abertas';
+      stateEl.className = 'badge badge-open';
+    }
+  }
+
+  function renderHost() {
+    const cfg = roomCfg();
+    const roundBtn = $('btn-round');
+    if (roundBtn) {
+      if (demo.activeRound) {
+        roundBtn.textContent = '⏭ Próxima rodada';
+        roundBtn.className = 'btn btn-warning btn-block';
+        roundBtn.disabled = demo.advancing;
+      } else if (limitReached()) {
+        roundBtn.textContent = '🏁 Rodadas encerradas';
+        roundBtn.className = 'btn btn-outline btn-block';
+        roundBtn.disabled = true;
+      } else {
+        roundBtn.textContent = '▶ Começar rodada';
+        roundBtn.className = 'btn btn-success btn-block';
+        roundBtn.disabled = !demo.hostReady || demo.starting;
+      }
+    }
+
+    $('host-code').textContent = demo.room ? demo.room.code : '—';
+    $('host-round').textContent = demo.activeRound ? 'rodada ' + demo.activeRound.number : 'rodada —';
+    $('host-limit').textContent = cfg.total_rounds > 0
+      ? 'limite: ' + cfg.total_rounds + ' rodada(s)'
+      : 'sem limite de rodadas';
+
+    renderTopBadges();
+    renderOrderPanel();
+    renderSummary();
+    renderScores();
+  }
+
+  function renderOrderPanel() {
+    const container = $('buzz-order');
+    if (!container) return;
+
+    const pending = pendingOrder();
+    if (pending.length === 0) {
+      let message = 'Aguardando o início da rodada.';
+      if (demo.activeRound && demo.order.length > 0) message = 'Todos os cliques desta rodada já foram tratados.';
+      else if (demo.activeRound) message = 'Ninguém apertou o botão ainda.';
+      container.innerHTML = '<p class="panel-empty">' + message + '</p>';
+      return;
+    }
+
+    const cfg = roomCfg();
+    const baseTs = firstTimestamp();
+    const punishTitle = cfg.penalty_type === 'points'
+      ? 'Errou: −' + cfg.penalty_points + ' ponto(s)'
+      : 'Errou: ' + cfg.penalty_rounds + ' rodada(s) sem buzinar';
+
+    container.innerHTML = pending.map((entry, index) => {
+      const position = entry.position || index + 1;
+      const delta = deltaLabel(entry, baseTs);
+      return '<div class="buzz-row' + (position === 1 ? ' first' : '') + '">' +
+        '<span class="buzz-pos">' + position + 'º</span>' +
+        '<span class="buzz-name">' + escapeHtml(entry.player_name || 'Jogador') + '</span>' +
+        (delta ? '<span class="buzz-time">' + delta + '</span>' : '') +
+        '<div class="buzz-actions">' +
+          '<button class="btn-plus" onclick="demoChangeScore(\'' + entry.player_id + '\',\'exact\')" ' +
+            'title="+' + cfg.points_exact + ' ponto(s)">+' + cfg.points_exact + '</button>' +
+          '<button class="btn-plus" onclick="demoChangeScore(\'' + entry.player_id + '\',\'near\')" ' +
+            'title="+' + cfg.points_near + ' ponto(s)">+' + cfg.points_near + '</button>' +
+          '<button class="btn-punish" onclick="demoPunish(\'' + entry.player_id + '\')" ' +
+            'title="' + escapeHtml(punishTitle) + '">Errou</button>' +
+          '<button class="btn-dismiss" onclick="demoDismiss(\'' + entry.player_id + '\')" ' +
+            'title="Tirar da lista sem pontos nem punição">✕</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderSummary() {
+    const container = $('buzz-summary');
+    if (!container) return;
+
+    const order = sortedOrder();
+    if (order.length === 0) {
+      container.innerHTML = '<p class="panel-empty">Nenhum clique nesta rodada.</p>';
+      return;
+    }
+
+    const baseTs = firstTimestamp();
+    container.innerHTML = order.map(entry => {
+      const delta = deltaLabel(entry, baseTs);
+      return '<div class="summary-row">' +
+        '<span class="summary-pos">' + entry.position + 'º</span>' +
+        '<span class="summary-name">' + escapeHtml(entry.player_name || 'Jogador') + '</span>' +
+        (delta ? '<span class="buzz-time">' + delta + '</span>' : '') +
+        decisionChip(entry.player_id) +
+      '</div>';
+    }).join('');
+  }
+
+  function renderScores() {
+    const container = $('score-list');
+    if (!container) return;
+
+    const rows = demo.players
+      .map(player => ({
+        id: player.id,
+        name: player.name,
+        score: scoreOf(player),
+        penalty: player.penalty,
+      }))
+      .sort((a, b) => (b.score - a.score) || a.name.localeCompare(b.name));
+
+    container.innerHTML = rows.map(row => {
+      const position = rows.filter(other => other.score > row.score).length + 1;
+      const medal = ['🥇', '🥈', '🥉'][position - 1] || position + 'º';
+      let penaltyHtml = '';
+      if (row.penalty) {
+        const title = row.penalty.active
+          ? 'Punido: ' + row.penalty.rounds_remaining + ' rodada(s) sem buzinar'
+          : 'Punição começa na rodada ' + (row.penalty.start_round ?? '—');
+        penaltyHtml = '<span class="score-penalty" title="' + escapeHtml(title) + '">🚫 ' +
+          row.penalty.rounds_remaining + '</span>';
+      }
+      return '<div class="score-row">' +
+        '<span class="pos">' + medal + '</span>' +
+        '<span class="name">' + escapeHtml(row.name) + '</span>' +
+        penaltyHtml +
+        '<span class="score">' + row.score + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderPhones() {
+    const container = $('phones');
+    if (!container) return;
+
+    container.innerHTML = demo.players.map(player => {
+      const penalty = player.penalty;
+      const myBuzz = demo.order.find(entry => entry.player_id === player.id);
+      const canBuzz = !!(demo.activeRound && demo.hostReady && !penalty?.active && !myBuzz && !player.buzzing);
+
+      let state = 'disabled';
+      if (demo.activeRound) {
+        if (penalty?.active) state = 'punished';
+        else if (myBuzz) state = 'pressed';
+        else if (player.buzzing) state = 'registering';
+        else state = 'active';
+      }
+
+      const phoneClasses = ['phone'];
+      if (demo.activeRound && state === 'active') phoneClasses.push('active');
+      if (myBuzz) phoneClasses.push('buzzed');
+      if (penalty?.active) phoneClasses.push('punished');
+      if (demo.decisions[player.id]) phoneClasses.push('judged');
+
+      let status;
+      if (!demo.activeRound) {
+        status = penalty?.active
+          ? 'Punido: ' + penalty.rounds_remaining + ' rodada(s) sem buzinar. Aguarde o apresentador.'
+          : 'Aguardando o apresentador iniciar a rodada.';
+      } else if (penalty?.active) {
+        status = 'Punido nesta rodada: ' + penalty.rounds_remaining + ' rodada(s) sem buzinar.';
+      } else if (myBuzz) {
+        status = 'Você apertou ' + myBuzz.position + 'º!';
+      } else if (player.buzzing) {
+        status = 'Registrando o clique…';
+      } else if (penalty) {
+        status = 'Pode buzinar. Punição começa na rodada ' +
+          (penalty.start_round ?? 'seguinte') + ' (' + penalty.rounds_remaining + ').';
+      } else {
+        status = 'Aperte a buzina!';
+      }
+
+      const decision = demo.decisions[player.id];
+      let resultHtml = '';
+      if (decision) {
+        if (decision.kind === 'exact' || decision.kind === 'near') {
+          resultHtml = '<div class="phone-result correct">✅ +' + decision.points + ' ponto(s)</div>';
+        } else if (decision.kind === 'punish') {
+          resultHtml = decision.penaltyType === 'points'
+            ? '<div class="phone-result wrong">❌ −' + decision.points + ' ponto(s)</div>'
+            : '<div class="phone-result wrong">❌ Punido: ' + decision.rounds + ' rodada(s)</div>';
+        } else if (decision.kind === 'dismiss') {
+          resultHtml = '<div class="phone-result neutral">✕ Fora da lista desta rodada</div>';
+        }
+      }
+
+      const penaltyBanner = penalty
+        ? '<div class="penalty-banner">🚫 ' +
+            (penalty.active ? 'Sem buzinar' : 'Punição a partir da próxima') +
+            ' · ' + penalty.rounds_remaining + ' rodada(s)</div>'
+        : '';
+
+      const orderChips = sortedOrder().map(entry =>
+        '<span class="chip' + (entry.player_id === player.id ? ' me' : '') + '">' +
+          entry.position + 'º ' + escapeHtml(entry.player_name || '') +
+        '</span>'
+      ).join('');
+
+      const buzzerClasses = ['buzzer-btn', state];
+      if (canBuzz) buzzerClasses.push('available');
+
+      return '<div class="' + phoneClasses.join(' ') + '">' +
+        '<div class="phone-head">' +
+          '<span class="phone-name">' + escapeHtml(player.name) + '</span>' +
+          '<span class="phone-score">' + scoreOf(player) + '</span>' +
+        '</div>' +
+        penaltyBanner +
+        '<div class="buzzer-wrap">' +
+          '<button type="button" class="' + buzzerClasses.join(' ') + '" ' +
+            (canBuzz ? '' : 'disabled ') +
+            'onclick="demoBuzz(\'' + player.id + '\')" ' +
+            'aria-label="Buzina de ' + escapeHtml(player.name) + '">' +
+            '<span class="buzzer-pos-badge' + (myBuzz ? ' show' : '') + '">' +
+              (myBuzz ? myBuzz.position + 'º' : '') +
+            '</span>' +
+            '🔔' +
+          '</button>' +
+        '</div>' +
+        '<div class="phone-status">' + status + '</div>' +
+        resultHtml +
+        (orderChips ? '<div class="phone-order">' + orderChips + '</div>' : '') +
+      '</div>';
+    }).join('');
+  }
+
+  function renderAll() {
+    renderHost();
+    renderPhones();
+  }
+
+  // ─── Conexões ────────────────────────────────────
+
+  function connectHost() {
+    const socket = io('/', { query: { room_id: demo.room.id, user_id: demo.host.id } });
+    demo.hostSocket = socket;
+
+    socket.on('connect', () => {
+      demo.hostReady = true;
+      socket.emit('sala:entrar', { room_id: demo.room.id, user_id: demo.host.id });
+      log('Host conectado.');
+      renderAll();
+    });
+    socket.on('disconnect', () => {
+      demo.hostReady = false;
+      renderAll();
+    });
+    socket.on('connect_error', (err) => {
+      demo.hostReady = false;
+      toast('Erro de conexão: ' + err.message);
+      renderAll();
+    });
+
+    socket.on('sala:status', applyStatus);
+    socket.on('rodada:iniciada', onRoundStarted);
+    socket.on('buzina:ordem', onBuzzerOrder);
+    socket.on('jogador:punido', onPunished);
+    socket.on('placar:atualizado', (data) => {
+      if (data && data.scores) applyScores(data.scores);
+      renderAll();
+    });
+    socket.on('rodada:proxima', onRoundClosed);
+    socket.on('erro', (data) => {
+      demo.starting = false;
+      demo.advancing = false;
+      log('Erro: ' + data.message);
+      toast(data.message);
+      renderAll();
+    });
+  }
+
+  function connectPlayerSocket(player) {
+    const socket = io('/', { query: { room_id: demo.room.id, user_id: player.id } });
+    player.socket = socket;
+
+    socket.on('connect', () => {
+      socket.emit('sala:entrar', { room_id: demo.room.id, user_id: player.id });
+    });
+    socket.on('connect_error', (err) => {
+      toast(player.name + ': ' + err.message);
+    });
+    socket.on('buzina:ordem', (data) => {
+      // O estado global é do host; aqui só liberamos o clique local.
+      if (data && Array.isArray(data.order) && data.order.some(entry => entry.player_id === player.id)) {
+        player.buzzing = false;
+      }
+    });
+    socket.on('erro', (data) => {
+      player.buzzing = false;
+      renderPhones();
+      toast(player.name + ': ' + data.message);
+    });
+    socket.on('sala:removido', (data) => {
+      toast((data && data.message) || 'Você foi removido da sala');
+    });
+  }
+
+  // ─── Cenário ─────────────────────────────────────
+
+  async function cleanupScenario() {
+    demo.scenarioId++;
+    demo.hostReady = false;
+    if (demo.hostSocket) {
+      try { demo.hostSocket.disconnect(); } catch (_) { /* ignore */ }
+    }
+    demo.players.forEach(player => {
+      if (player.socket) {
+        try { player.socket.disconnect(); } catch (_) { /* ignore */ }
+      }
+    });
+
+    const oldRoom = demo.room;
+    const oldHost = demo.host;
+
+    demo.room = null;
+    demo.host = null;
+    demo.players = [];
+    demo.hostSocket = null;
+    demo.activeRound = null;
+    demo.order = [];
+    demo.judged = new Set();
+    demo.decisions = {};
+    demo.starting = false;
+    demo.advancing = false;
+    demo.scores = {};
+    demo.roundsPlayed = 0;
+
+    if (oldRoom && oldHost) {
+      try {
+        await fetch('/api/rooms/' + oldRoom.id, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ presenter_id: oldHost.id }),
+        });
+      } catch (_) { /* ignore */ }
+    }
+  }
+
+  async function bootScenario() {
+    const button = $('btn-new');
+    button.disabled = true;
+    button.textContent = '⏳ Criando cenário…';
+    demo.config = configFromForm();
+    demo.autoNext = $('toggle-auto').checked;
+
+    try {
+      await cleanupScenario();
+      setSetupStatus('Criando apresentador…');
+
+      const hostRes = await api('/auth', { name: 'Demo Host ' + Date.now() });
+      if (!hostRes || !hostRes.user) {
+        throw new Error((hostRes && hostRes.error) || 'Falha ao criar apresentador');
+      }
+      demo.host = hostRes.user;
+
+      setSetupStatus('Criando sala do tipo Ordem das Buzinas…');
+      const roomRes = await api('/rooms', {
+        user_id: demo.host.id,
+        title: 'Teste — Ordem das Buzinas',
+        type: 'buzzer-order',
+        config: {
+          quiz_url: '',
+          total_rounds: demo.config.rounds,
+          points_exact: demo.config.exact,
+          points_near: demo.config.near,
+          penalty_type: demo.config.penaltyType,
+          penalty_rounds: demo.config.penaltyRounds,
+          penalty_points: demo.config.penaltyPoints,
+        },
+      });
+      if (!roomRes || !roomRes.room) {
+        throw new Error((roomRes && roomRes.error) || 'Falha ao criar sala');
+      }
+      demo.room = roomRes.room;
+
+      for (const name of PLAYER_NAMES) {
+        setSetupStatus('Entrando com ' + name + '…');
+        const userRes = await api('/auth', { name });
+        if (!userRes || !userRes.user) throw new Error('Falha ao criar jogador ' + name);
+
+        const joined = await api('/rooms/' + demo.room.id + '/players', { user_id: userRes.user.id });
+        if (!joined || !joined.ok) {
+          throw new Error((joined && joined.error) || 'Falha ao entrar com ' + name);
+        }
+
+        demo.players.push({
+          id: userRes.user.id,
+          name,
+          score: 0,
+          penalty: null,
+          socket: null,
+          buzzing: false,
+        });
+      }
+
+      log('Sala ' + demo.room.code + ' criada com ' + demo.players.length + ' jogadores.');
+      setSetupStatus('Sala ' + demo.room.code + ' pronta: ' + demo.players.length + ' jogadores, ' +
+        (demo.config.rounds > 0 ? demo.config.rounds + ' rodada(s)' : 'sem limite de rodadas') + '.');
+      renderAll();
+      connectHost();
+      demo.players.forEach(connectPlayerSocket);
+    } catch (err) {
+      setSetupStatus('Erro: ' + err.message);
+      toast('Erro ao criar cenário: ' + err.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = '🔄 Criar novo cenário';
+    }
+  }
+
+  // Handlers globais usados nos onclick gerados.
+  window.demoBuzz = playerBuzz;
+  window.demoChangeScore = changeScore;
+  window.demoPunish = punishPlayer;
+  window.demoDismiss = dismissPlayer;
+
+  function togglePenaltyFields() {
+    const pointsMode = $('cfg-penalty-type').value === 'points';
+    $('field-penalty-rounds').classList.toggle('hidden', pointsMode);
+    $('field-penalty-points').classList.toggle('hidden', !pointsMode);
+  }
+
+  $('btn-new').addEventListener('click', bootScenario);
+  $('btn-round').addEventListener('click', handleRoundButton);
+  $('toggle-auto').addEventListener('change', (event) => {
+    demo.autoNext = event.target.checked;
+  });
+  $('cfg-penalty-type').addEventListener('change', togglePenaltyFields);
+
+  window.addEventListener('beforeunload', () => {
+    if (!demo.room || !demo.host) return;
+    try {
+      fetch('/api/rooms/' + demo.room.id, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ presenter_id: demo.host.id }),
+        keepalive: true,
+      });
+    } catch (_) { /* ignore */ }
+  });
+
+  bootScenario();
+})();
+</script>
+</body>
+</html>

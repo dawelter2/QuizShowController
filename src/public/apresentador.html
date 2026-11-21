@@ -48,6 +48,9 @@
   .btn-plus { background: #00b894; color: #fff; }
   .btn-minus { background: #d63031; color: #fff; }
   .btn-punish { background: #d63031; color: #fff; }
+  /* ✕ cinza: tira o jogador da lista da rodada sem pontos nem punição. */
+  .buzz-actions .btn-dismiss { background: transparent; border: 1px solid #3a3a52; color: #8a8aa0; }
+  .buzz-actions .btn-dismiss:hover { background: #2f2f4a; border-color: #636e72; color: #dfe6e9; }
 
   /* Presença e remoção */
   .player-card.is-offline { opacity: .62; }
@@ -105,6 +108,43 @@
   .content.layout-video .buzz-actions button { min-width: 24px; height: 23px; font-size: .58rem; padding: 0 .2rem; }
   @keyframes buzzIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes goldPulse { 0%,100% { box-shadow: 0 0 8px rgba(253,203,110,.4); } 50% { box-shadow: 0 0 22px rgba(253,203,110,.95); } }
+
+  /* ─── Tipo Respostas: ordem das respostas + correção ─── */
+  .panel-answers .panel-body { max-height: 26vh; overflow-y: auto; }
+  .panel-correct .panel-body { max-height: 22vh; overflow-y: auto; }
+  .answer-row { display: flex; align-items: center; gap: .45rem; padding: .4rem .5rem; margin-bottom: .3rem; border: 1px solid #2a2a3e; border-radius: 8px; background: #232342; animation: buzzIn .22s ease-out; }
+  .answer-row:last-child { margin-bottom: 0; }
+  .answer-row.first { border-color: #fdcb6e; background: linear-gradient(90deg, rgba(253,203,110,.14), #232342); }
+  .answer-row.is-correct { border-color: rgba(0,184,148,.65); background: linear-gradient(90deg, rgba(0,184,148,.16), #232342); }
+  .answer-row.is-wrong { opacity: .72; }
+  .answer-pos { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: #6c5ce7; color: #fff; font-size: .72rem; font-weight: 900; }
+  .answer-row.first .answer-pos { background: #fdcb6e; color: #1a1a2e; }
+  .answer-name { flex: 1; min-width: 0; font-size: .95rem; font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .answer-chip { flex-shrink: 0; min-width: 34px; text-align: center; padding: .18rem .45rem; border-radius: 6px; font-size: .82rem; font-weight: 900; background: #16162a; border: 1px solid #3a3a52; color: #fdcb6e; }
+  .answer-chip.hidden-answer { color: #8a8aa0; border-style: dashed; letter-spacing: .08em; }
+  .answer-points { flex-shrink: 0; min-width: 42px; text-align: right; font-size: .72rem; font-weight: 800; }
+  .answer-points.positive { color: #2ee5a8; }
+  .answer-points.zero { color: #8a8aa0; }
+  .answer-time { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: .64rem; font-weight: 700; color: #a29bfe; white-space: nowrap; }
+  .answers-footer { padding-top: .45rem; border-top: 1px solid #2a2a3e; margin-top: .45rem; }
+  .answers-footer .btn { padding: .45rem .75rem; font-size: .82rem; }
+  .answers-waiting { margin: .35rem 0 0; font-size: .7rem; color: #8a8aa0; line-height: 1.35; }
+  .answer-choice-grid { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .answer-choice { flex: 1 1 44px; min-width: 44px; height: 44px; border-radius: 8px; border: 2px solid #3a3a52; background: #232342; color: #fff; font-weight: 900; font-size: 1.05rem; cursor: pointer; transition: all .15s; }
+  .answer-choice:hover:not(:disabled) { border-color: #a29bfe; background: #2f2f52; }
+  /* Estado clicável da correção: destaque roxo para o host saber que pode escolher. */
+  .answer-choice.available { border-color: #6c5ce7; box-shadow: 0 0 0 2px rgba(108,92,231,.2), 0 0 14px rgba(108,92,231,.3); }
+  .answer-choice.selected { border-color: #fdcb6e; background: rgba(253,203,110,.18); color: #fdcb6e; }
+  .answer-choice.correct { border-color: #00b894; background: rgba(0,184,148,.2); color: #2ee5a8; }
+  .answer-choice:disabled { cursor: default; }
+  .answer-choice.wrong-choice { opacity: .35; }
+  .btn-confirm-correct { margin-top: .5rem; background: #00b894; color: #fff; }
+  .answer-correct-hint { font-size: .7rem; color: #8a8aa0; margin-top: .45rem; }
+  .content.layout-video .answer-row { padding: .3rem .45rem; margin-bottom: .22rem; }
+  .content.layout-video .answer-pos { width: 24px; height: 24px; font-size: .66rem; }
+  .content.layout-video .answer-name { font-size: .9rem; }
+  .content.layout-video .answer-chip { font-size: .72rem; padding: .12rem .35rem; }
+  .content.layout-video .panel-correct .panel-body { max-height: 18vh; overflow-y: auto; }
 
   .round-go { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 1000; opacity: 0; }
   .round-go .go-text { font-size: clamp(6rem, 22vw, 14rem); font-weight: 900; color: #fdcb6e; text-shadow: 0 0 40px rgba(253,203,110,.9), 0 0 80px rgba(253,203,110,.4); transform: scale(.3); letter-spacing: .05em; }
@@ -259,19 +299,38 @@
           <input type="checkbox" id="toggle-auto-next" onchange="toggleAutoNextRound(this.checked)">
           <span class="toggle-slider"></span>
         </label>
-        <label class="toggle-label" for="toggle-auto-next">Auto-próxima rodada</label>
+        <label class="toggle-label" for="toggle-auto-next" title="Avança sozinho quando a lista de ordem dos botões esvaziar">Auto-próxima rodada</label>
       </div>
       <div class="status-bar" id="pres-round-info">
         <span class="badge badge-outline" id="pres-round-room-title"></span>
-        <span class="badge badge-primary">Rodada <span id="pres-round-num">1</span></span>
+        <span class="badge badge-primary">Rodada <span id="pres-round-num">1</span><span id="pres-round-total"></span></span>
       </div>
     </div>
-    <section class="panel panel-order" aria-labelledby="pres-order-title">
+    <section class="panel panel-order" id="panel-buzzer-order" aria-labelledby="pres-order-title">
       <div class="panel-head">
         <h3 id="pres-order-title">⚡ Ordem dos botões</h3>
         <span class="panel-hint">cliques da rodada</span>
       </div>
       <div class="panel-body" id="pres-buzzer-order"></div>
+    </section>
+
+    <section class="panel panel-order panel-answers hidden" id="panel-answers" aria-labelledby="pres-answers-title">
+      <div class="panel-head">
+        <h3 id="pres-answers-title">📝 Ordem das respostas</h3>
+        <span class="panel-hint" id="pres-answers-progress">0/0</span>
+      </div>
+      <div class="panel-body" id="pres-answer-order"></div>
+      <div class="answers-footer hidden" id="answers-footer">
+        <button class="btn btn-primary" id="btn-reveal-answers" onclick="handleRevealAnswers()">👁 Revelar respostas agora</button>
+      </div>
+    </section>
+
+    <section class="panel panel-correct hidden" id="panel-correct-answer" aria-labelledby="pres-correct-title">
+      <div class="panel-head">
+        <h3 id="pres-correct-title">✅ Resposta correta</h3>
+        <span class="panel-hint" id="pres-correct-hint">escolha a alternativa</span>
+      </div>
+      <div class="panel-body" id="pres-correct-options"></div>
     </section>
 
     <section class="panel panel-score" aria-labelledby="pres-score-title">

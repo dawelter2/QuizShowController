@@ -1,6 +1,202 @@
 state.currentRoundId = null;
 state.myPenalty = null;
+state.myAnswer = null;
+state.answersRevealed = false;
+state.roundGraded = false;
+state.correctOption = null;
+state.answersEligible = [];
+state.answerResult = null;
 let allScores = [];
+
+// ─── Tipo "Respostas" ─────────────────────────────
+function isAnswersGame() {
+  return state.room?.type === 'answers';
+}
+
+function setupGameTypeLayout() {
+  const answers = isAnswersGame();
+  document.body.classList.toggle('game-answers', answers);
+  const answersEl = $('player-answers');
+  const buzzerEl = $('player-buzzer');
+  const orderEl = $('player-buzzer-order');
+  if (answersEl) answersEl.classList.toggle('hidden', !answers);
+  if (buzzerEl) buzzerEl.classList.toggle('hidden', answers);
+  if (orderEl) orderEl.classList.toggle('hidden', answers);
+  if (answers) {
+    ensureAnswersGrid();
+    renderAnswers();
+  }
+}
+
+function answerConfig() {
+  const cfg = state.room?.config || {};
+  const count = Math.min(6, Math.max(1, Number(cfg.option_count) || 4));
+  const style = cfg.option_style === 'numeric' ? 'numeric' : 'alpha';
+  return { count, style };
+}
+
+function answerLabel(option) {
+  return answerConfig().style === 'numeric'
+    ? String(option)
+    : String.fromCharCode(64 + option);
+}
+
+function ensureAnswersGrid() {
+  const grid = $('answers-grid');
+  if (!grid) return;
+  const cfg = answerConfig();
+  const key = cfg.count + ':' + cfg.style;
+  if (state._answersGridKey === key) return;
+  state._answersGridKey = key;
+  grid.innerHTML = Array.from({ length: cfg.count }, (_, i) => {
+    const option = i + 1;
+    return `<button type="button" class="answer-btn" data-option="${option}" disabled onclick="handleAnswer(${option})">${answerLabel(option)}</button>`;
+  }).join('');
+}
+
+function answersEligibleForMe() {
+  if (!state.answersEligible.length) return true;
+  return state.answersEligible.includes(state.user?.id);
+}
+
+function renderAnswers() {
+  if (!isAnswersGame()) return;
+  ensureAnswersGrid();
+
+  const grid = $('answers-grid');
+  const status = $('answers-status');
+  const resultEl = $('answer-result');
+  if (!grid || !status || !resultEl) return;
+
+  const my = state.myAnswer;
+  const canAnswer = !!state.currentRoundId &&
+    !state.answersRevealed &&
+    !state.roundGraded &&
+    answersEligibleForMe() &&
+    !my;
+
+  grid.querySelectorAll('.answer-btn').forEach(btn => {
+    const option = Number(btn.dataset.option);
+    btn.classList.remove('selected', 'correct', 'wrong', 'available');
+    if (my === option) btn.classList.add('selected');
+    if (state.answersRevealed) {
+      if (state.correctOption === option) btn.classList.add('correct');
+      else if (my === option) btn.classList.add('wrong');
+    }
+    btn.disabled = !canAnswer;
+    btn.classList.toggle('available', canAnswer);
+  });
+
+  if (!state.currentRoundId) {
+    status.textContent = 'Aguardando o apresentador iniciar a rodada.';
+  } else if (!answersEligibleForMe()) {
+    status.textContent = 'Você entrou após o início desta rodada. Aguarde a próxima.';
+  } else if (state.roundGraded) {
+    status.textContent = 'Rodada corrigida. Aguarde a próxima rodada.';
+  } else if (my) {
+    status.textContent = state.answersRevealed
+      ? `Sua resposta: ${answerLabel(my)}.`
+      : `Resposta registrada: ${answerLabel(my)}. Só é possível escolher uma vez.`;
+  } else if (state.answersRevealed) {
+    status.textContent = 'Respostas reveladas. O apresentador vai corrigir a rodada.';
+  } else {
+    status.textContent = 'Toque na sua resposta. Só é possível escolher uma vez.';
+  }
+
+  resultEl.classList.add('hidden');
+  resultEl.className = 'answer-result hidden';
+  if (state.answerResult) {
+    if (state.answerResult.is_correct) {
+      const pts = Number(state.answerResult.awarded) || 0;
+      resultEl.textContent = `✅ Acertou! +${pts} ponto(s)`;
+      resultEl.classList.add('correct');
+    } else {
+      const correct = state.correctOption ? ` — correta: ${answerLabel(state.correctOption)}` : '';
+      resultEl.textContent = `❌ Resposta errada${correct}`;
+      resultEl.classList.add('wrong');
+    }
+    resultEl.classList.remove('hidden');
+  } else if (state.roundGraded && !my) {
+    resultEl.textContent = 'Você não respondeu esta rodada.';
+    resultEl.classList.add('neutral');
+    resultEl.classList.remove('hidden');
+  }
+}
+
+function resetAnswersRoundState() {
+  state.myAnswer = null;
+  state.answersRevealed = false;
+  state.roundGraded = false;
+  state.correctOption = null;
+  state.answersEligible = [];
+  state.answerResult = null;
+  renderAnswers();
+}
+
+function applyAnswersRoundSnapshot(round) {
+  if (round && round.status === 'active') {
+    const sameRound = state.currentRoundId === round.id;
+    state.currentRoundId = round.id;
+    state.answersRevealed = round.answers_revealed === true;
+    state.roundGraded = round.graded === true;
+    state.correctOption = round.correct_option ?? null;
+    state.answersEligible = Array.isArray(round.eligible_player_ids)
+      ? round.eligible_player_ids
+      : [];
+    $('player-status-round-num').textContent = round.round_number;
+
+    const mine = (round.answers || []).find(a => a.player_id === state.user?.id);
+    if (!sameRound) {
+      state.myAnswer = null;
+      state.answerResult = null;
+    }
+    // A alternativa só vem no snapshot quando já foi revelada; a própria
+    // escolha chega pelo evento personalizado resposta:minha.
+    if (mine && mine.option !== null && mine.option !== undefined) {
+      state.myAnswer = mine.option;
+    }
+    if (mine && mine.is_correct !== null && mine.is_correct !== undefined) {
+      state.answerResult = { is_correct: mine.is_correct, awarded: mine.awarded_points ?? 0 };
+    }
+    renderAnswers();
+  } else {
+    state.currentRoundId = null;
+    $('player-status-round-num').textContent = '1';
+    resetAnswersRoundState();
+  }
+}
+
+function handleAnswer(option) {
+  if (!isAnswersGame()) return;
+  if (!state.currentRoundId) return toast('Aguarde o apresentador iniciar a rodada');
+  if (state.myAnswer) return toast('Você já respondeu esta rodada');
+  if (state.answersRevealed || state.roundGraded) return toast('Esta rodada já foi encerrada');
+  if (!answersEligibleForMe()) return toast('Você entrou após o início desta rodada');
+
+  // Trava imediatamente: a escolha não pode ser revertida nem trocada.
+  state.myAnswer = option;
+  renderAnswers();
+
+  if (navigator.vibrate) navigator.vibrate(40);
+
+  state.socket.emit('resposta:enviar', {
+    room_id: state.room.id,
+    round_id: state.currentRoundId,
+    player_id: state.user.id,
+    option,
+  }, (res) => {
+    if (res && res.ok) return;
+    // Recusa do servidor: se foi duplicada, a escolha antiga continua valendo.
+    if (res && res.code === 'DUPLICATE') {
+      toast(res.error || 'Você já respondeu esta rodada');
+      return;
+    }
+    state.myAnswer = null;
+    renderAnswers();
+    toast((res && res.error) || 'Não foi possível registrar sua resposta');
+  });
+}
+
 
 function setBuzzerState(mode) {
   const buzzer = $('player-buzzer');
@@ -49,6 +245,11 @@ function renderBuzzerOrder(order) {
 }
 
 function applyRoundSnapshot(round) {
+  if (isAnswersGame()) {
+    applyAnswersRoundSnapshot(round);
+    return;
+  }
+
   const buzzer = $('player-buzzer');
   if (round && round.status === 'active') {
     state.currentRoundId = round.id;
@@ -159,12 +360,29 @@ function connectPlayerSocket() {
     if (me) $('player-score').textContent = me.score;
     allScores = data.scores || [];
     updatePlayerRank(allScores);
+    setupGameTypeLayout();
     applyRoundSnapshot(data.current_round);
   });
 
   state.socket.on('rodada:iniciada', (data) => {
     state.currentRoundId = data.round_id;
     $('player-status-round-num').textContent = data.round_number;
+
+    if (isAnswersGame()) {
+      state.myAnswer = null;
+      state.answersRevealed = false;
+      state.roundGraded = false;
+      state.correctOption = null;
+      state.answerResult = null;
+      state.answersEligible = Array.isArray(data.eligible_player_ids)
+        ? data.eligible_player_ids
+        : [];
+      setupGameTypeLayout();
+      renderAnswers();
+      showRoundGo();
+      if (navigator.vibrate) navigator.vibrate(60);
+      return;
+    }
 
     const myPunishment = (data.punishments || []).find(p => p.player_id === state.user.id);
     if (myPunishment) {
@@ -196,6 +414,7 @@ function connectPlayerSocket() {
   });
 
   state.socket.on('buzina:ordem', (data) => {
+    if (isAnswersGame()) return;
     const myInfo = data.order.find(o => o.player_id === state.user.id);
     const wasAlreadyPressed = $('player-buzzer').classList.contains('buzzer-pressed');
     
@@ -214,6 +433,68 @@ function connectPlayerSocket() {
     renderBuzzerOrder(data.order);
   });
 
+  // ─── Tipo Respostas ─────────────────────────────
+  state.socket.on('respostas:ordem', (data) => {
+    if (!isAnswersGame() || !data) return;
+    state.answersRevealed = data.answers_revealed === true;
+    if (Array.isArray(data.eligible_player_ids)) {
+      state.answersEligible = data.eligible_player_ids;
+    }
+    renderAnswers();
+  });
+
+  state.socket.on('respostas:reveladas', (data) => {
+    if (!isAnswersGame() || !data) return;
+    const wasRevealed = state.answersRevealed;
+    state.answersRevealed = true;
+    state.roundGraded = data.graded === true;
+    state.correctOption = data.correct_option ?? null;
+    if (Array.isArray(data.eligible_player_ids)) {
+      state.answersEligible = data.eligible_player_ids;
+    }
+    renderAnswers();
+    if (!wasRevealed) toast('As respostas foram reveladas!');
+  });
+
+  // Alternativa do próprio jogador (enviada só para os sockets dele).
+  state.socket.on('resposta:minha', (data) => {
+    if (!isAnswersGame() || !data) return;
+    if (data.round_id !== state.currentRoundId) return;
+    if (data.option !== null && data.option !== undefined) {
+      state.myAnswer = data.option;
+    }
+    renderAnswers();
+  });
+
+  state.socket.on('respostas:corrigidas', (data) => {
+    if (!isAnswersGame() || !data) return;
+    state.answersRevealed = true;
+    state.roundGraded = true;
+    state.correctOption = data.correct_option ?? null;
+    if (Array.isArray(data.eligible_player_ids)) {
+      state.answersEligible = data.eligible_player_ids;
+    }
+    const mine = (data.answers || []).find(a => a.player_id === state.user.id);
+    if (mine) {
+      if (mine.option !== null && mine.option !== undefined) state.myAnswer = mine.option;
+      state.answerResult = {
+        is_correct: mine.is_correct === true,
+        awarded: mine.awarded_points ?? 0,
+      };
+    }
+    renderAnswers();
+
+    if (state.answerResult) {
+      if (state.answerResult.is_correct) {
+        toast(`✅ Você acertou! +${state.answerResult.awarded} ponto(s)`);
+        if (navigator.vibrate) navigator.vibrate([40, 40, 80]);
+      } else {
+        toast('❌ Você errou esta rodada');
+        if (navigator.vibrate) navigator.vibrate([80, 50, 80]);
+      }
+    }
+  });
+
   state.socket.on('placar:atualizado', (data) => {
     const me = data.scores.find(s => s.player_id === state.user.id);
     if (me) {
@@ -226,6 +507,18 @@ function connectPlayerSocket() {
 
   state.socket.on('jogador:punido', (data) => {
     if (!data) return;
+
+    // Punição por pontos: o placar é atualizado por placar:atualizado.
+    if (data.penalty_type === 'points') {
+      if (data.player_id === state.user.id) {
+        toast(`Você errou! −${data.points_subtracted} ponto(s).`);
+        if (navigator.vibrate) navigator.vibrate([80, 50, 80]);
+      } else {
+        toast(`${data.player_name} errou: −${data.points_subtracted} ponto(s)`);
+      }
+      return;
+    }
+
     if (data.player_id === state.user.id) {
       setPenaltyBanner({
         active: false,
@@ -241,6 +534,7 @@ function connectPlayerSocket() {
 
   state.socket.on('rodada:proxima', () => {
     state.currentRoundId = null;
+    resetAnswersRoundState();
     setBuzzerState('disabled');
     updateBuzzerBadge(null);
     $('player-buzzer').classList.remove('first-buzz');
@@ -312,6 +606,7 @@ setupAuth()
     $('player-room-title').textContent = roomTitle;
     $('player-status-room-title').textContent = roomTitle;
     document.title = roomTitle + ' — Jogador';
+    setupGameTypeLayout();
     return api('/rooms/' + room.id + '/players', { user_id: state.user.id })
       .then(res => {
         if (!res || !res.ok) {

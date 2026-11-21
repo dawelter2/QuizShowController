@@ -47,12 +47,52 @@ Renomeia o usuário sem criar outra identidade (mesmo `user_id`, mesma sessão).
 
 ---
 
+### Tipos de Jogo
+
+```
+GET /api/game-types → Catálogo de tipos de sala + opções do formulário
+```
+
+**Resposta:**
+```json
+{
+  "game_types": [
+    {
+      "id": "buzzer-order",
+      "name": "Ordem das Buzinas",
+      "description": "Quiz em vídeo: os jogadores apertam a buzina e o apresentador pontua na ordem dos cliques.",
+      "fields": [
+        { "key": "quiz_url", "label": "URL do quiz no YouTube", "type": "url", "format": "youtube", "default": "", "help": "..." },
+        { "key": "total_rounds", "label": "Número de rodadas", "type": "number", "min": 0, "max": 200, "default": 0 },
+        { "key": "points_exact", "label": "Pontuação certeira", "type": "number", "min": 1, "max": 100, "default": 3 },
+        { "key": "points_near", "label": "Pontuação quase", "type": "number", "min": 0, "max": 100, "default": 1 },
+        { "key": "penalty_type", "label": "Tipo de punição", "type": "select", "default": "rounds", "options": [
+          { "value": "rounds", "label": "Rodadas de punição" },
+          { "value": "points", "label": "Subtrair pontos" }
+        ] },
+        { "key": "penalty_rounds", "label": "Rodadas de punição", "type": "number", "min": 1, "max": 50, "default": 3, "show_when": { "key": "penalty_type", "equals": "rounds" } },
+        { "key": "penalty_points", "label": "Pontos a subtrair", "type": "number", "min": 0, "max": 100, "default": 3, "show_when": { "key": "penalty_type", "equals": "points" } }
+      ]
+    }
+  ]
+}
+```
+
+> O lobby renderiza o formulário de criação a partir de `fields`. Campos com
+> `show_when` só aparecem quando a opção referenciada tem o valor indicado.
+
+O catálogo também expõe o tipo **`answers`** ("Respostas") com os campos:
+`video_url` (URL YouTube), `option_count` (1–6, default 4), `option_style`
+(`alpha`/`numeric`), `points_first` (default 3) e `points_later` (default 1).
+
+---
+
 ### Salas
 
 ```
 POST /api/rooms         → Criar sala
 GET  /api/rooms/:code   → Buscar sala pelo código
-PUT  /api/rooms/:id     → Atualizar sala (título, notas)
+PUT  /api/rooms/:id     → Atualizar sala (título, notas, configuração)
 DELETE /api/rooms/:id   → Encerrar sala
 ```
 
@@ -62,7 +102,9 @@ DELETE /api/rooms/:id   → Encerrar sala
 |-------|------|-----------|
 | user_id | string | ID do usuário (vira apresentador) |
 | title | string | Nome da sessão (opcional) |
-| notes | string | Link do vídeo, observações (opcional) |
+| notes | string | Observações (opcional) |
+| type | string | Tipo de jogo (default `buzzer-order`) |
+| config | object | Opções da sala; campos ausentes usam o default do tipo |
 
 **Resposta:**
 ```json
@@ -71,12 +113,24 @@ DELETE /api/rooms/:id   → Encerrar sala
     "id": "uuid",
     "code": "X7K9",
     "title": "CineQuiz 12/05",
-    "notes": "https://youtube.com/playlist?list=...",
-    "status": "waiting",
-    "presenter": { "id": "uuid", "name": "Mestre" }
+    "notes": "",
+    "type": "buzzer-order",
+    "config": {
+      "quiz_url": "https://www.youtube.com/watch?v=...",
+      "total_rounds": 10,
+      "points_exact": 3,
+      "points_near": 1,
+      "penalty_type": "rounds",
+      "penalty_rounds": 3,
+      "penalty_points": 3
+    },
+    "status": "waiting"
   }
 }
 ```
+
+> Configuração inválida (tipo desconhecido, URL inválida, número fora do
+> intervalo) → `400 { "error": "..." }`.
 
 #### `GET /api/rooms/:code`
 
@@ -89,6 +143,8 @@ Busca pelo código de 4 letras. Usado para validar se a sala existe antes de ent
     "id": "uuid",
     "code": "X7K9",
     "title": "CineQuiz 12/05",
+    "type": "buzzer-order",
+    "config": { "total_rounds": 10, "points_exact": 3, "points_near": 1, "penalty_type": "rounds", "penalty_rounds": 3, "penalty_points": 3, "quiz_url": "" },
     "status": "waiting",
     "player_count": 3
   }
@@ -101,6 +157,7 @@ Busca pelo código de 4 letras. Usado para validar se a sala existe antes de ent
 |-------|------|-----------|
 | title | string | Novo título (opcional) |
 | notes | string | Novas observações (opcional) |
+| config | object | Configuração parcial; é mesclada com a atual e validada (opcional) |
 
 **Resposta:** `{ "room": { ... } }`
 
@@ -233,6 +290,10 @@ Se a identidade for adotada no socket, o servidor também emite `sessao:adotada`
 
 Apresentador libera buzinas e inicia nova rodada.
 
+> Se a sala foi criada com `config.total_rounds > 0` e o limite já foi
+> atingido, o servidor emite `erro` com `code: "LIMITE_RODADAS"` e não cria a
+> rodada. Com `total_rounds = 0` (default) não há limite.
+
 ```json
 {
   "event": "rodada:iniciar",
@@ -255,10 +316,16 @@ Apresentador libera buzinas e inicia nova rodada.
     "media_url": "https://youtube.com/...",
     "punishments": [
       { "player_id": "uuid", "rounds_remaining": 3 }
-    ]
+    ],
+    "game_type": "answers",
+    "eligible_player_ids": ["uuid", "uuid"]
   }
 }
 ```
+
+> No tipo `answers`, `eligible_player_ids` é o snapshot de quem pode responder
+> nesta rodada; quem entrar depois aguarda a próxima. No tipo `buzzer-order` a
+> lista vem vazia e o campo `punishments` continua valendo.
 
 ---
 
@@ -295,7 +362,121 @@ Jogador apertou a buzina.
 
 ---
 
-#### `resposta:escrever`
+#### `resposta:enviar` (tipo Respostas)
+
+Jogador escolhe uma alternativa. **Só vale uma vez por rodada** — a escolha não
+pode ser revertida nem trocada.
+
+```json
+{
+  "event": "resposta:enviar",
+  "data": {
+    "room_id": "uuid",
+    "round_id": "uuid",
+    "player_id": "uuid",
+    "option": 2
+  }
+}
+```
+
+**Servidor valida:**
+- rodada ativa e ainda não revelada/corrigida;
+- jogador elegível (snapshot do início da rodada);
+- `option` entre `1` e `config.option_count`;
+- jogador ainda não respondeu (`DUPLICATE`).
+
+**Servidor emite para todos:** `respostas:ordem`
+
+```json
+{
+  "event": "respostas:ordem",
+  "data": {
+    "round_id": "uuid",
+    "answers": [
+      { "player_id": "uuid", "player_name": "Ana", "position": 1, "option": null, "timestamp": "..." },
+      { "player_id": "uuid", "player_name": "Bob", "position": 2, "option": null, "timestamp": "..." }
+    ],
+    "answered_count": 2,
+    "eligible_count": 4,
+    "answers_revealed": false,
+    "graded": false,
+    "correct_option": null
+  }
+}
+```
+
+> `option` fica `null` até a revelação. O jogador que respondeu recebe a própria
+> alternativa em um evento personalizado `resposta:minha`
+> (`{ round_id, option, position }`), sem ver a dos demais.
+
+Quando todos os elegíveis ainda na sala responderam, o servidor revela sozinho e
+emite `respostas:reveladas` com as mesmas chaves, mas com `option` preenchido e
+`answers_revealed: true`.
+
+---
+
+#### `respostas:revelar` (tipo Respostas)
+
+O apresentador revela as respostas antes de todos responderem (jogador AFK).
+
+```json
+{
+  "event": "respostas:revelar",
+  "data": { "room_id": "uuid", "round_id": "uuid" }
+}
+```
+
+**Servidor emite para todos:** `respostas:reveladas` (payload acima) e
+`sala:status`.
+
+---
+
+#### `resposta:corrigir` (tipo Respostas)
+
+O apresentador escolhe a alternativa correta da rodada. Só é permitido depois
+da revelação e uma única vez.
+
+```json
+{
+  "event": "resposta:corrigir",
+  "data": { "room_id": "uuid", "round_id": "uuid", "option": 2 }
+}
+```
+
+**Servidor:**
+1. Percorre as respostas na ordem de chegada;
+2. O primeiro acerto recebe `config.points_first`; os demais acertos recebem
+   `config.points_later`; erros recebem `0`;
+3. Atualiza o `score_cache` dos jogadores;
+4. Emite `respostas:corrigidas`, `placar:atualizado` e `sala:status` para todos.
+
+```json
+{
+  "event": "respostas:corrigidas",
+  "data": {
+    "round_id": "uuid",
+    "correct_option": 2,
+    "answers_revealed": true,
+    "graded": true,
+    "answers": [
+      { "player_id": "uuid", "player_name": "Ana", "position": 1, "option": 2, "is_correct": true, "awarded_points": 3 },
+      { "player_id": "uuid", "player_name": "Bob", "position": 2, "option": 1, "is_correct": false, "awarded_points": 0 },
+      { "player_id": "uuid", "player_name": "Carol", "position": 3, "option": 2, "is_correct": true, "awarded_points": 1 }
+    ],
+    "scores": [ { "player_id": "uuid", "player_name": "Ana", "score": 3 } ]
+  }
+}
+```
+
+> Com **Auto-próxima rodada** ligado, o painel chama `rodada:proxima` depois da
+> correção. Desligado, espera o clique do apresentador.
+
+---
+
+#### `resposta:escrever` (legado, Ordem das Buzinas)
+
+> Reservado para a resposta digitada do tipo buzina. O fluxo principal atual usa
+> apenas a buzina; o tipo Respostas usa `resposta:enviar` com alternativas.
 
 Jogador digitou/modificou a resposta (em tempo real enquanto digita, ou ao submeter).
 
@@ -330,7 +511,9 @@ Jogador digitou/modificou a resposta (em tempo real enquanto digita, ou ao subme
 
 #### `pontos:alterar`
 
-Apresentador soma pontos de um acerto (`+3` na mosca / `+1` raspando).
+Apresentador soma pontos de um acerto. O servidor calcula o delta a partir da
+configuração da sala: `judgment: "exact"` usa `config.points_exact` (default
+`+3`) e `judgment: "near"` usa `config.points_near` (default `+1`).
 
 ```json
 {
@@ -339,10 +522,13 @@ Apresentador soma pontos de um acerto (`+3` na mosca / `+1` raspando).
     "room_id": "uuid",
     "round_id": "uuid",
     "player_id": "uuid",
-    "score_delta": 3
+    "judgment": "exact"
   }
 }
 ```
+
+> `score_delta` (número) continua aceito por compatibilidade quando `judgment`
+> não é enviado.
 
 **Servidor:**
 1. Atualiza o `score_cache` do jogador na sala
@@ -366,7 +552,7 @@ Apresentador soma pontos de um acerto (`+3` na mosca / `+1` raspando).
 
 #### `jogador:punir`
 
-Apresentador aplica a punição de **3 rodadas sem buzinar** (não altera pontos).
+Apresentador aplica a punição configurada na sala.
 
 ```json
 {
@@ -378,8 +564,9 @@ Apresentador aplica a punição de **3 rodadas sem buzinar** (não altera pontos
 **Servidor:**
 1. Valida que o socket pertence ao `presenter_id`, que existe rodada ativa e que o
    jogador apertou a buzina nesta rodada.
-2. Define `penalty_start_round = R+1` e `penalty_until_round = R+3`.
-3. Emite `jogador:punido` para todos:
+2. Se `config.penalty_type = "rounds"`: define `penalty_start_round = R+1` e
+   `penalty_until_round = R+N` (`N = config.penalty_rounds`, default 3) e emite
+   `jogador:punido` com `penalty_type: "rounds"`:
 
 ```json
 {
@@ -387,6 +574,7 @@ Apresentador aplica a punição de **3 rodadas sem buzinar** (não altera pontos
   "data": {
     "player_id": "uuid",
     "player_name": "Bob",
+    "penalty_type": "rounds",
     "duration_rounds": 3,
     "start_round": 4,
     "rounds_remaining": 3
@@ -394,8 +582,27 @@ Apresentador aplica a punição de **3 rodadas sem buzinar** (não altera pontos
 }
 ```
 
-4. Emite `sala:status` para atualizar badges/contadores.
-5. **Ack:** `{ "ok": true, "penalty": { ... } }` ou `{ "ok": false, "error": "..." }`.
+3. Se `config.penalty_type = "points"`: desconta `config.penalty_points`
+   (default 3) do placar na hora, sem bloquear a buzina, e emite:
+
+```json
+{
+  "event": "jogador:punido",
+  "data": {
+    "player_id": "uuid",
+    "player_name": "Bob",
+    "penalty_type": "points",
+    "points_subtracted": 3,
+    "new_score": 5
+  }
+}
+```
+
+4. Emite `placar:atualizado` (punição por pontos) e `sala:status` para atualizar
+   badges/contadores.
+5. **Ack:** `{ "ok": true, "penalty_type": "rounds", "penalty": { ... } }`,
+   `{ "ok": true, "penalty_type": "points", "points_subtracted": 3, "new_score": 5 }`
+   ou `{ "ok": false, "error": "..." }`.
 
 Erros: `NAO_AUTORIZADO`, `SEM_RODADA_ATIVA`, `RODADA_INVALIDA`, `JOGADOR_NAO_BUZINOU`.
 
@@ -493,9 +700,13 @@ Renomeia o usuário sem trocar de identidade/sessão.
 | `rodada:iniciada` | Todos | Apresentador iniciou rodada |
 | `rodada:proxima` | Todos | Apresentador avançou rodada |
 | `buzina:ordem` | Todos | Alguém apertou a buzina |
-| `resposta:atualizada` | Apresentador | Jogador digitou resposta |
+| `respostas:ordem` | Todos | Alguém registrou uma alternativa (opções ocultas) |
+| `respostas:reveladas` | Todos | Todas responderam ou o host revelou manualmente |
+| `respostas:corrigidas` | Todos | Host escolheu a alternativa correta e os pontos foram aplicados |
+| `resposta:minha` | Só o próprio jogador | Alternativa escolhida por ele (para reconexão) |
+| `resposta:atualizada` | Apresentador | Jogador digitou resposta (fluxo legado da buzina) |
 | `placar:atualizado` | Todos | Apresentador alterou pontos |
-| `jogador:punido` | Todos | Apresentador aplicou punição de 3 rodadas |
+| `jogador:punido` | Todos | Apresentador aplicou a punição configurada (rodadas ou pontos) |
 | `erro` | Quem enviou | Validação falhou |
 
 #### `sala:status`
@@ -509,8 +720,19 @@ Renomeia o usuário sem trocar de identidade/sessão.
       "code": "X7K9",
       "title": "CineQuiz 12/05",
       "status": "playing",
-      "notes": "https://..."
+      "notes": "",
+      "type": "buzzer-order",
+      "config": {
+        "quiz_url": "https://www.youtube.com/watch?v=...",
+        "total_rounds": 10,
+        "points_exact": 3,
+        "points_near": 1,
+        "penalty_type": "rounds",
+        "penalty_rounds": 3,
+        "penalty_points": 3
+      }
     },
+    "rounds_played": 3,
     "players": [
       {
         "user_id": "uuid",
@@ -544,9 +766,16 @@ Renomeia o usuário sem trocar de identidade/sessão.
       "round_number": 3,
       "status": "active",
       "media_url": "https://...",
-      "buzzer_order": [
-        { "player_id": "uuid", "player_name": "Ana", "position": 1 }
-      ]
+      "game_type": "answers",
+      "buzzer_order": [],
+      "answers_revealed": true,
+      "graded": false,
+      "correct_option": null,
+      "eligible_player_ids": ["uuid", "uuid"],
+      "answers": [
+        { "player_id": "uuid", "player_name": "Ana", "position": 1, "option": 2, "is_correct": null, "awarded_points": null }
+      ],
+      "answered_count": 1
     }
   }
 }
@@ -581,7 +810,10 @@ Renomeia o usuário sem trocar de identidade/sessão.
 | Entrar na sala (conectar)     |      | ✅        |
 | Iniciar rodada                |      | ✅        |
 | Apertar buzina                |      | ✅        |
-| Escrever resposta             |      | ✅        |
+| Escolher alternativa (Respostas) |   | ✅        |
+| Revelar respostas (Respostas) |      | ✅        |
+| Corrigir rodada (Respostas)   |      | ✅        |
+| Escrever resposta (legado)    |      | ✅        |
 | Alterar pontos                |      | ✅        |
 | Aplicar punição (3 rodadas)   |      | ✅        |
 | Próxima rodada                |      | ✅        |

@@ -32,6 +32,8 @@ app.get('/apresentador', (_req, res) => res.sendFile(join(__dirname, 'public', '
 app.get('/jogador',      (_req, res) => res.sendFile(join(__dirname, 'public', 'jogador.html')));
 app.get('/score',        (_req, res) => res.sendFile(join(__dirname, 'public', 'score.html')));
 app.get('/score-demo',   (_req, res) => res.sendFile(join(__dirname, 'public', 'score-demo.html')));
+app.get('/respostas-demo', (_req, res) => res.sendFile(join(__dirname, 'public', 'respostas-demo.html')));
+app.get('/buzinas-demo',  (_req, res) => res.sendFile(join(__dirname, 'public', 'buzinas-demo.html')));
 
 // SPA fallback
 app.get('*', (_req, res) => {
