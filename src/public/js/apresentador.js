@@ -4,12 +4,22 @@ state.currentRoundNumber = null;
 state.roundsPlayed = 0;
 state.buzzerOrder = [];
 state.autoNextRound = false;
+state.advancingRound = false;
 state.showVideo = false;
 state.videoUrl = '';
 state.videoId = '';
 state.quizUrl = '';
 state.judgedPlayers = new Set();
 state.prevScoresByPid = {};
+// Tipo "Respostas"
+state.answerOrder = [];
+state.answersRevealed = false;
+state.answersGraded = false;
+state.correctOption = null;
+state.pendingCorrectOption = null;
+state.answersEligible = [];
+state.gradingAnswers = false;
+state.revealingAnswers = false;
 
 // Configuração da sala (valores default = comportamento antigo do jogo).
 const PRESENTER_DEFAULT_CONFIG = {
@@ -38,6 +48,271 @@ function updateRoundDisplay(roundNumber) {
   if (numEl && roundNumber != null) numEl.textContent = roundNumber;
   if (totalEl) totalEl.textContent = total > 0 ? ` de ${total}` : '';
 }
+
+// ─── Tipo "Respostas" ───────────────────────────────
+function isAnswersGame() {
+  return state.room?.type === 'answers';
+}
+
+function answerConfig() {
+  const cfg = state.room?.config || {};
+  const count = Math.min(6, Math.max(1, Number(cfg.option_count) || 4));
+  const style = cfg.option_style === 'numeric' ? 'numeric' : 'alpha';
+  return {
+    count,
+    style,
+    points_first: Number(cfg.points_first) || 0,
+    points_later: Number(cfg.points_later) || 0,
+    video_url: typeof cfg.video_url === 'string' ? cfg.video_url : '',
+  };
+}
+
+function answerLabel(option) {
+  return answerConfig().style === 'numeric'
+    ? String(option)
+    : String.fromCharCode(64 + option);
+}
+
+function setupGameTypeLayout() {
+  const answers = isAnswersGame();
+  const buzzerPanel = $('panel-buzzer-order');
+  const answerPanel = $('panel-answers');
+  const correctPanel = $('panel-correct-answer');
+  if (buzzerPanel) buzzerPanel.classList.toggle('hidden', answers);
+  if (answerPanel) answerPanel.classList.toggle('hidden', !answers);
+  if (correctPanel) {
+    correctPanel.classList.toggle('hidden', !answers || !state.answersRevealed);
+  }
+  if (answers) {
+    renderAnswerOrder();
+    renderCorrectAnswerPanel();
+  }
+}
+
+function answeredPlayerIds() {
+  return new Set((state.answerOrder || []).map(a => a.player_id));
+}
+
+function eligiblePlayers() {
+  const active = (state.players || []).filter(p => p.role === 'player');
+  if (!state.answersEligible.length) return active;
+  const ids = new Set(state.answersEligible);
+  return active.filter(p => ids.has(p.user_id));
+}
+
+function renderAnswerOrder() {
+  const container = $('pres-answer-order');
+  if (!container) return;
+
+  const order = (state.answerOrder || []).slice().sort((a, b) => a.position - b.position);
+  const eligible = eligiblePlayers();
+  const answered = answeredPlayerIds();
+  const progress = $('pres-answers-progress');
+  if (progress) {
+    if (!state.currentRoundId) progress.textContent = 'aguardando rodada';
+    else if (state.answersRevealed) progress.textContent = `${order.length} resposta(s) · reveladas`;
+    else progress.textContent = `${order.length}/${eligible.length} responderam`;
+  }
+
+  // Botão de revelação manual (para jogador AFK).
+  const footer = $('answers-footer');
+  const revealBtn = $('btn-reveal-answers');
+  const canReveal = !!state.currentRoundId &&
+    !state.answersRevealed &&
+    !state.answersGraded;
+  if (footer) footer.classList.toggle('hidden', !canReveal);
+  if (revealBtn) {
+    revealBtn.disabled = state.revealingAnswers || order.length === 0;
+    revealBtn.textContent = order.length === 0
+      ? '👁 Revelar respostas (sem respostas ainda)'
+      : '👁 Revelar respostas agora';
+  }
+
+  if (order.length === 0) {
+    let message = 'Aguardando o início da rodada.';
+    if (state.currentRoundId && state.answersRevealed) message = 'Nenhuma resposta nesta rodada.';
+    else if (state.currentRoundId) message = 'Ninguém respondeu ainda.';
+    container.innerHTML = `<p class="panel-empty">${message}</p>`;
+    return;
+  }
+
+  const firstTs = order[0]?.timestamp ? new Date(order[0].timestamp).getTime() : null;
+  const missing = eligible.filter(p => !answered.has(p.user_id));
+
+  let html = order.map((a, i) => {
+    let deltaHtml = '';
+    if (firstTs && a.timestamp) {
+      const diff = (new Date(a.timestamp).getTime() - firstTs) / 1000;
+      if (diff > 0.0005) deltaHtml = `<span class="answer-time">+${diff.toFixed(3)}s</span>`;
+    }
+    const pos = a.position || i + 1;
+    const revealed = state.answersRevealed;
+    const cls = [
+      'answer-row',
+      pos === 1 ? 'first' : '',
+      state.answersGraded && revealed ? (a.is_correct ? 'is-correct' : 'is-wrong') : '',
+    ].filter(Boolean).join(' ');
+    const chip = revealed && a.option != null
+      ? answerLabel(a.option)
+      : '?';
+    const chipCls = revealed && a.option != null ? 'answer-chip' : 'answer-chip hidden-answer';
+    let pointsHtml = '';
+    if (state.answersGraded && revealed) {
+      const pts = Number(a.awarded_points) || 0;
+      pointsHtml = a.is_correct
+        ? `<span class="answer-points positive">+${pts}</span>`
+        : '<span class="answer-points zero">0</span>';
+    }
+    return `
+      <div class="${cls}">
+        <span class="answer-pos">${pos}º</span>
+        <span class="answer-name">${escapeHtml(a.player_name || 'Jogador')}</span>
+        ${deltaHtml}
+        <span class="${chipCls}" title="${revealed ? 'Resposta' : 'Resposta oculta até a revelação'}">${chip}</span>
+        ${pointsHtml}
+      </div>
+    `;
+  }).join('');
+
+  if (!state.answersRevealed && state.currentRoundId && missing.length > 0) {
+    const names = missing.map(p => `${escapeHtml(p.name)}${p.online === false ? ' (offline)' : ''}`).join(', ');
+    html += `<p class="answers-waiting">⏳ Aguardando: ${names}</p>`;
+  }
+
+  container.innerHTML = html;
+}
+
+function renderCorrectAnswerPanel() {
+  const panel = $('panel-correct-answer');
+  const container = $('pres-correct-options');
+  const hint = $('pres-correct-hint');
+  if (!panel || !container) return;
+
+  const visible = isAnswersGame() && state.answersRevealed;
+  panel.classList.toggle('hidden', !visible);
+  if (!visible) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const cfg = answerConfig();
+  const graded = state.answersGraded;
+  const buttons = Array.from({ length: cfg.count }, (_, i) => {
+    const option = i + 1;
+    let cls = 'answer-choice';
+    if (graded && state.correctOption === option) cls += ' correct';
+    else if (!graded && state.pendingCorrectOption === option) cls += ' selected';
+    else if (graded && state.correctOption != null) cls += ' wrong-choice';
+    else if (!graded) cls += ' available';
+    return `<button type="button" class="${cls}" data-option="${option}" ${graded ? 'disabled' : ''} onclick="chooseCorrectAnswer(${option})">${answerLabel(option)}</button>`;
+  }).join('');
+
+  let html = `<div class="answer-choice-grid">${buttons}</div>`;
+  if (!graded && state.pendingCorrectOption != null) {
+    html += `<button class="btn btn-confirm-correct" onclick="confirmCorrectAnswer()">✔ Confirmar resposta ${answerLabel(state.pendingCorrectOption)}</button>`;
+  }
+  container.innerHTML = html;
+
+  if (hint) {
+    if (graded && state.correctOption != null) {
+      hint.textContent = `corrigida · resposta ${answerLabel(state.correctOption)}`;
+    } else if (state.pendingCorrectOption != null) {
+      hint.textContent = `confirmar ${answerLabel(state.pendingCorrectOption)}?`;
+    } else {
+      hint.textContent = 'escolha a alternativa';
+    }
+  }
+}
+
+function applyAnswersSnapshot(round) {
+  if (round) {
+    const sameRound = state.currentRoundId === round.id;
+    state.currentRoundId = round.id;
+    state.currentRoundNumber = round.round_number;
+    state.answerOrder = round.answers || [];
+    state.answersRevealed = round.answers_revealed === true;
+    state.answersGraded = round.graded === true;
+    state.correctOption = round.correct_option ?? null;
+    state.answersEligible = Array.isArray(round.eligible_player_ids)
+      ? round.eligible_player_ids
+      : [];
+    if (!sameRound) {
+      state.pendingCorrectOption = null;
+      state.gradingAnswers = false;
+      state.revealingAnswers = false;
+    }
+    updateRoundDisplay(round.round_number);
+    updateRoundButton(true);
+    setupGameTypeLayout();
+  } else {
+    state.currentRoundId = null;
+    state.currentRoundNumber = null;
+    state.answerOrder = [];
+    state.answersRevealed = false;
+    state.answersGraded = false;
+    state.correctOption = null;
+    state.pendingCorrectOption = null;
+    state.answersEligible = [];
+    state.gradingAnswers = false;
+    state.revealingAnswers = false;
+    const total = Number(roomConfig().total_rounds) || 0;
+    const nextNumber = total > 0
+      ? Math.min(state.roundsPlayed + 1, total)
+      : state.roundsPlayed + 1;
+    updateRoundDisplay(nextNumber);
+    updateRoundButton(false);
+    setupGameTypeLayout();
+  }
+}
+
+function handleRevealAnswers() {
+  if (!isAnswersGame()) return;
+  if (!state.currentRoundId) return toast('Inicie uma rodada primeiro');
+  if (state.answersRevealed) return;
+  if (state.revealingAnswers) return;
+
+  state.revealingAnswers = true;
+  renderAnswerOrder();
+  state.socket.emit('respostas:revelar', {
+    room_id: state.room.id,
+    round_id: state.currentRoundId,
+  }, (res) => {
+    state.revealingAnswers = false;
+    if (!res || !res.ok) {
+      renderAnswerOrder();
+      toast((res && res.error) || 'Não foi possível revelar as respostas');
+    }
+  });
+}
+
+function chooseCorrectAnswer(option) {
+  if (!isAnswersGame() || !state.answersRevealed || state.answersGraded) return;
+  const cfg = answerConfig();
+  if (!Number.isInteger(option) || option < 1 || option > cfg.count) return;
+  state.pendingCorrectOption = option;
+  renderCorrectAnswerPanel();
+}
+
+function confirmCorrectAnswer() {
+  if (!isAnswersGame() || !state.currentRoundId) return;
+  if (!state.answersRevealed) return toast('Revele as respostas antes de corrigir');
+  if (state.answersGraded) return toast('Esta rodada já foi corrigida');
+  if (state.pendingCorrectOption == null) return toast('Escolha a resposta correta');
+  if (state.gradingAnswers) return;
+
+  state.gradingAnswers = true;
+  state.socket.emit('resposta:corrigir', {
+    room_id: state.room.id,
+    round_id: state.currentRoundId,
+    option: state.pendingCorrectOption,
+  }, (res) => {
+    if (!res || !res.ok) {
+      state.gradingAnswers = false;
+      toast((res && res.error) || 'Não foi possível corrigir a rodada');
+    }
+  });
+}
+
 
 function renderPresenterPlayers(players) {
   state.players = players; // Salva para re-render
@@ -124,7 +399,10 @@ function renderPresenterScores(scores) {
     }
   });
 
-  if (orderChanged) renderBuzzerOrderList();
+  if (orderChanged) {
+    renderBuzzerOrderList();
+    maybeAutoAdvanceRound();
+  }
   // Reordena o placar conforme os pontos.
   if (state.players) renderPresenterPlayers(state.players);
 }
@@ -134,25 +412,44 @@ function renderBuzzerOrder(order) {
   renderBuzzerOrderList();
 }
 
-function renderBuzzerOrderList() {
-  const container = $('pres-buzzer-order');
-  if (!container) return;
+function sortedBuzzerOrder() {
+  return (state.buzzerOrder || []).slice().sort((a, b) => a.position - b.position);
+}
 
-  const rawOrder = (state.buzzerOrder || []).slice().sort((a, b) => a.position - b.position);
+// Cliques que ainda esperam uma decisão do apresentador (pontuar, punir ou
+// tirar da lista). A lista de pendentes é a única fonte do auto-avanço.
+function pendingBuzzerOrder() {
   const activeIds = new Set((state.players || []).filter(p => p.role === 'player').map(p => p.user_id));
   // Jogadores punidos não voltam para a lista de pendentes (inclusive após refresh).
   const punishedIds = new Set(
     (state.players || []).filter(p => p.role === 'player' && p.penalty).map(p => p.user_id)
   );
-  const pending = rawOrder.filter(o =>
+  return sortedBuzzerOrder().filter(o =>
     !state.judgedPlayers.has(o.player_id) &&
     !punishedIds.has(o.player_id) &&
     (activeIds.size === 0 || activeIds.has(o.player_id))
   );
+}
+
+// Com o auto-próxima ligado, a rodada só avança quando não sobra ninguém na
+// lista de ordem dos botões.
+function maybeAutoAdvanceRound() {
+  if (isAnswersGame()) return; // Respostas só avança após a correção.
+  if (!state.autoNextRound || !state.currentRoundId) return;
+  if (pendingBuzzerOrder().length > 0) return;
+  handleNextRound();
+}
+
+function renderBuzzerOrderList() {
+  const container = $('pres-buzzer-order');
+  if (!container) return;
+
+  const rawOrder = sortedBuzzerOrder();
+  const pending = pendingBuzzerOrder();
 
   if (pending.length === 0) {
     let message = 'Aguardando o início da rodada.';
-    if (rawOrder.length > 0) message = 'Todos os cliques já foram pontuados.';
+    if (rawOrder.length > 0) message = 'Todos os cliques desta rodada já foram tratados.';
     else if (state.currentRoundId) message = 'Ninguém apertou o botão ainda.';
     container.innerHTML = `<p class="panel-empty">${message}</p>`;
     return;
@@ -184,6 +481,7 @@ function renderBuzzerOrderList() {
           <button class="btn-plus" onclick="changeScore('${o.player_id}', 'exact')" title="+${exactPoints} ponto(s)">+${exactPoints}</button>
           <button class="btn-plus" onclick="changeScore('${o.player_id}', 'near')" title="+${nearPoints} ponto(s)">+${nearPoints}</button>
           <button class="btn-punish" onclick="punishPlayer('${o.player_id}')" title="${escapeHtml(punishTitle)}" aria-label="Punir jogador">Errou</button>
+          <button class="btn-dismiss" onclick="dismissBuzzerPlayer('${o.player_id}')" title="Tirar da lista (sem pontos nem punição)" aria-label="Tirar da lista sem pontos nem punição">✕</button>
         </div>
       </div>
     `;
@@ -209,6 +507,11 @@ function updateRoundButton(isRoundActive) {
 }
 
 function applyRoundSnapshot(round) {
+  if (isAnswersGame()) {
+    applyAnswersSnapshot(round);
+    return;
+  }
+
   if (round) {
     const sameRound = state.currentRoundId === round.id;
     state.currentRoundId = round.id;
@@ -229,6 +532,7 @@ function applyRoundSnapshot(round) {
     state.currentRoundNumber = null;
     state.buzzerOrder = [];
     state.judgedPlayers.clear();
+    state.advancingRound = false;
     const total = Number(roomConfig().total_rounds) || 0;
     const nextNumber = total > 0
       ? Math.min(state.roundsPlayed + 1, total)
@@ -241,6 +545,11 @@ function applyRoundSnapshot(round) {
 
 function handleRoundControl() {
   if (state.currentRoundId) {
+    // No tipo Respostas, evita pular uma rodada que ainda não foi corrigida
+    // por engano (todos ficariam sem pontos).
+    if (isAnswersGame() && !state.answersGraded) {
+      if (!confirm('A rodada ainda não foi corrigida. Avançar sem pontuar?')) return;
+    }
     // Se há uma rodada ativa, finaliza ela. 
     // O evento 'rodada:proxima' recebido via socket irá disparar o início da próxima automaticamente.
     handleNextRound();
@@ -262,7 +571,9 @@ function handleStartRound() {
 }
 
 function handleNextRound() {
-  if (!state.currentRoundId) return;
+  if (!state.currentRoundId || state.advancingRound) return;
+  // Evita pedir a próxima rodada mais de uma vez enquanto o servidor responde.
+  state.advancingRound = true;
   state.socket.emit('rodada:proxima', {
     room_id: state.room.id,
     round_id: state.currentRoundId,
@@ -368,9 +679,7 @@ function changeScore(playerId, judgment) {
     player_id: playerId,
     judgment,
   });
-  if (state.autoNextRound) {
-    handleNextRound();
-  }
+  maybeAutoAdvanceRound();
 }
 
 function punishPlayer(playerId) {
@@ -388,10 +697,20 @@ function punishPlayer(playerId) {
       toast((res && res.error) || 'Não foi possível aplicar a punição');
     }
   });
+}
 
-  if (state.autoNextRound) {
-    handleNextRound();
-  }
+// Tira o jogador da lista de pendentes da rodada sem somar/descontar pontos e
+// sem aplicar punição. É o que permite esvaziar a lista para o auto-avanço.
+function dismissBuzzerPlayer(playerId) {
+  if (!state.currentRoundId) return toast('Inicie uma rodada primeiro');
+
+  const entry = (state.buzzerOrder || []).find(o => o.player_id === playerId);
+  if (!entry) return;
+
+  state.judgedPlayers.add(playerId);
+  renderBuzzerOrderList();
+  toast(`${entry.player_name || 'Jogador'} saiu da lista sem pontos nem punição`);
+  maybeAutoAdvanceRound();
 }
 
 function handleRemovePlayer(userId) {
@@ -455,17 +774,89 @@ function connectPresenterSocket() {
     state.currentRoundId = data.round_id;
     state.currentRoundNumber = data.round_number;
     state.roundsPlayed = data.round_number;
-    state.buzzerOrder = [];
-    state.judgedPlayers.clear();
+    state.advancingRound = false;
     updateRoundDisplay(data.round_number);
     updateRoundButton(true);
+
+    if (isAnswersGame()) {
+      state.answerOrder = [];
+      state.answersRevealed = false;
+      state.answersGraded = false;
+      state.correctOption = null;
+      state.pendingCorrectOption = null;
+      state.answersEligible = Array.isArray(data.eligible_player_ids)
+        ? data.eligible_player_ids
+        : [];
+      state.gradingAnswers = false;
+      state.revealingAnswers = false;
+      renderPresenterPlayers(state.players || []);
+      setupGameTypeLayout();
+      showRoundGo();
+      return;
+    }
+
+    state.buzzerOrder = [];
+    state.judgedPlayers.clear();
     renderBuzzerOrder([]);
     renderPresenterPlayers(state.players || []);
     showRoundGo();
   });
 
   state.socket.on('buzina:ordem', (data) => {
+    if (isAnswersGame()) return;
     renderBuzzerOrder(data.order || []);
+  });
+
+  // ─── Tipo Respostas ─────────────────────────────
+  state.socket.on('respostas:ordem', (data) => {
+    if (!isAnswersGame() || !data) return;
+    state.answerOrder = data.answers || [];
+    state.answersRevealed = data.answers_revealed === true;
+    state.answersGraded = data.graded === true;
+    state.correctOption = data.correct_option ?? null;
+    if (Array.isArray(data.eligible_player_ids)) {
+      state.answersEligible = data.eligible_player_ids;
+    }
+    setupGameTypeLayout();
+  });
+
+  state.socket.on('respostas:reveladas', (data) => {
+    if (!isAnswersGame() || !data) return;
+    const wasRevealed = state.answersRevealed;
+    state.answerOrder = data.answers || [];
+    state.answersRevealed = true;
+    state.answersGraded = data.graded === true;
+    state.correctOption = data.correct_option ?? null;
+    state.pendingCorrectOption = null;
+    state.revealingAnswers = false;
+    if (Array.isArray(data.eligible_player_ids)) {
+      state.answersEligible = data.eligible_player_ids;
+    }
+    setupGameTypeLayout();
+    if (!wasRevealed) toast('Respostas reveladas! Escolha a resposta correta.');
+  });
+
+  state.socket.on('respostas:corrigidas', (data) => {
+    if (!isAnswersGame() || !data) return;
+    state.answerOrder = data.answers || state.answerOrder;
+    state.answersRevealed = true;
+    state.answersGraded = true;
+    state.correctOption = data.correct_option ?? null;
+    state.pendingCorrectOption = null;
+    state.gradingAnswers = false;
+    if (Array.isArray(data.eligible_player_ids)) {
+      state.answersEligible = data.eligible_player_ids;
+    }
+    setupGameTypeLayout();
+
+    // Auto-próxima: só depois da correção (senão ninguém pontuaria).
+    if (state.autoNextRound && !roundsLimitReached()) {
+      setTimeout(() => {
+        if (state.autoNextRound && state.currentRoundId && !state.advancingRound) {
+          handleNextRound();
+        }
+      }, 900);
+    }
   });
 
   state.socket.on('placar:atualizado', (data) => renderPresenterScores(data.scores));
@@ -475,6 +866,7 @@ function connectPresenterSocket() {
     if (state.buzzerOrder.some(o => o.player_id === data.player_id)) {
       state.judgedPlayers.add(data.player_id);
       renderBuzzerOrderList();
+      maybeAutoAdvanceRound();
     }
     if (data.penalty_type === 'points') {
       toast(`${data.player_name} errou: −${data.points_subtracted} ponto(s)`);
@@ -488,9 +880,19 @@ function connectPresenterSocket() {
     state.currentRoundNumber = null;
     state.buzzerOrder = [];
     state.judgedPlayers.clear();
+    state.advancingRound = false;
+    state.answerOrder = [];
+    state.answersRevealed = false;
+    state.answersGraded = false;
+    state.correctOption = null;
+    state.pendingCorrectOption = null;
+    state.answersEligible = [];
+    state.gradingAnswers = false;
+    state.revealingAnswers = false;
     updateRoundButton(false);
     renderBuzzerOrder([]);
     renderPresenterPlayers(state.players || []);
+    setupGameTypeLayout();
 
     // Inicia a próxima rodada automaticamente, exceto quando o limite acabou.
     if (roundsLimitReached()) {
@@ -500,7 +902,15 @@ function connectPresenterSocket() {
     setTimeout(() => handleStartRound(), 500);
   });
 
-  state.socket.on('erro', (data) => toast(data.message));
+  state.socket.on('erro', (data) => {
+    state.gradingAnswers = false;
+    state.revealingAnswers = false;
+    if (isAnswersGame()) {
+      renderAnswerOrder();
+      renderCorrectAnswerPanel();
+    }
+    toast(data.message);
+  });
 }
 
 // ─── Init ─────────────────────────────────────────
@@ -521,13 +931,16 @@ if (window.__PRESENTER_DEMO__) {
       document.title = roomTitle + ' — Apresentador';
 
       // URL configurada na criação da sala (opcional): já carrega o vídeo.
-      state.quizUrl = (room.config && room.config.quiz_url) || '';
+      state.quizUrl = room.type === 'answers'
+        ? (room.config && room.config.video_url) || ''
+        : (room.config && room.config.quiz_url) || '';
       $('video-url').value = state.quizUrl;
       if (state.quizUrl) {
         const videoId = extractYouTubeId(state.quizUrl);
         if (videoId) openVideo(state.quizUrl, videoId);
       }
       updateRoundDisplay(1);
+      setupGameTypeLayout();
 
       connectPresenterSocket();
     })

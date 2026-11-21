@@ -12,13 +12,16 @@ Acesse pelo navegador — não é necessário instalar nada. Para usar como font
 
 ## Funcionalidades
 
-- **Sala de Quiz configurável** — Tipo de jogo ("Ordem das Buzinas"), URL do quiz no YouTube, número de rodadas, pontuação certeira/quase e tipo de punição
+- **Sala de Quiz configurável** — Tipos de jogo **"Ordem das Buzinas"** e **"Respostas"**, URL do quiz no YouTube, número de rodadas, pontuação e punições
+- **Tipo Respostas** — Alternativas em grid (A–F ou 1–6), uma escolha por jogador, revelação automática (ou manual para AFK), correção pelo apresentador e pontuação maior para quem acertar primeiro
 - **Sistema de Buzzer** — Detecção de quem apertou primeiro (ordem de chegada)
 - **Punição por erro configurável** — Rodadas sem buzinar (default 3) ou subtração de pontos (default 3)
 - **Temporizador** — Contagem regressiva para responder cada pergunta
 - **Painel do Apresentador** — Interface para controlar o jogo (mostrar pergunta, revelar resposta, pontuar)
 - **Tela de Transmissão (OBS)** — Layout limpo e personalizável para ser capturado como fonte de navegador no OBS
 - **Ranking ao Vivo** — Placar atualizado em tempo real
+- **Página de teste de Respostas** — `/respostas-demo` cria uma sala real com 4 jogadores simulados para validar o fluxo completo
+- **Página de teste de Ordem das Buzinas** — `/buzinas-demo` cria uma sala real com 4 jogadores simulados para validar cliques, ordem, pontuação e punições
 - **Múltiplos Jogadores** — Suporte a N jogadores com dispositivos próprios (celular/tablet)
 
 ## Estrutura do Projeto
@@ -64,9 +67,21 @@ npm run dev
 ## Testes
 
 ```bash
-# Compila o TypeScript e roda os testes de identidade/presença, punição e configuração de sala
+# Compila o TypeScript e roda os testes de identidade/presença, punição,
+# configuração de sala e fluxo do tipo Respostas
 npm test
 ```
+
+Para validar a interface do tipo **Respostas** sem montar uma partida real,
+suba o servidor e abra `http://localhost:9000/respostas-demo`. A página cria uma
+sala de verdade com quatro jogadores simulados, permitindo testar grid, ocultação
+das respostas, revelação manual, correção e pontuação do primeiro acerto.
+
+Para validar o tipo **Ordem das Buzinas**, abra
+`http://localhost:9000/buzinas-demo`. A página também cria uma sala real com
+quatro jogadores simulados e reproduz o painel do apresentador e os celulares,
+permitindo testar a ordem dos cliques, a pontuação certeira/quase, a punição por
+erro (rodadas ou pontos), o limite de rodadas e o auto-avanço.
 
 ## Deploy
 
@@ -80,6 +95,10 @@ O projeto está publicado em **https://quizshowcontroller.onrender.com/**, hospe
 | Build Command | `npm install && npm run build` |
 | Start Command | `npm start`            |
 | Porta         | Definida pelo Render via variável `PORT` (localmente: `9000`) |
+
+> O `npm run build` compila o TypeScript e copia `src/public` para
+> `dist/public`, então o `npm start` (que serve `dist`) já encontra os HTML/CSS/JS
+> atualizados — incluindo as páginas `/respostas-demo` e `/buzinas-demo`.
 
 ### Publicar uma nova versão
 

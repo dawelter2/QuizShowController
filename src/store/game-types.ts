@@ -5,9 +5,12 @@
 // configuração. Novos tipos devem ser registrados em GAME_TYPES; o lobby
 // renderiza o formulário a partir desta metadata (GET /api/game-types).
 
-export type GameTypeId = 'buzzer-order';
+export type GameTypeId = 'buzzer-order' | 'answers';
 
 export type PenaltyType = 'rounds' | 'points';
+
+// Como as alternativas são rotuladas na tela do jogador.
+export type AnswerOptionStyle = 'alpha' | 'numeric';
 
 export type BuzzerOrderConfig = {
   quiz_url: string;
@@ -19,6 +22,18 @@ export type BuzzerOrderConfig = {
   penalty_points: number;
 };
 
+export type AnswersConfig = {
+  video_url: string;
+  option_count: number;
+  option_style: AnswerOptionStyle;
+  points_first: number;
+  points_later: number;
+};
+
+// Configuração armazenada na sala. Cada tipo grava apenas os campos que
+// declara no catálogo; os acessores usam defaults quando o campo não existe.
+export type RoomConfig = Partial<BuzzerOrderConfig> & Partial<AnswersConfig>;
+
 // Configuração atual do jogo, mantida como default de novos tipos de sala.
 export const DEFAULT_BUZZER_ORDER_CONFIG: BuzzerOrderConfig = {
   quiz_url: '',
@@ -28,6 +43,14 @@ export const DEFAULT_BUZZER_ORDER_CONFIG: BuzzerOrderConfig = {
   penalty_type: 'rounds',
   penalty_rounds: 3,
   penalty_points: 3,
+};
+
+export const DEFAULT_ANSWERS_CONFIG: AnswersConfig = {
+  video_url: '',
+  option_count: 4,
+  option_style: 'alpha',
+  points_first: 3,
+  points_later: 1,
 };
 
 export type ConfigValue = string | number;
@@ -63,6 +86,7 @@ export type GameType = {
 };
 
 const C = DEFAULT_BUZZER_ORDER_CONFIG;
+const A = DEFAULT_ANSWERS_CONFIG;
 
 const BUZZER_ORDER_FIELDS: GameConfigField[] = [
   {
@@ -139,6 +163,59 @@ const BUZZER_ORDER_FIELDS: GameConfigField[] = [
   },
 ];
 
+const ANSWERS_FIELDS: GameConfigField[] = [
+  {
+    key: 'video_url',
+    label: 'URL do vídeo no YouTube',
+    type: 'url',
+    format: 'youtube',
+    placeholder: 'https://www.youtube.com/watch?v=...',
+    default: A.video_url,
+    help: 'Opcional. Se preencher, o vídeo já vem carregado no painel do apresentador.',
+  },
+  {
+    key: 'option_count',
+    label: 'Quantidade de opções',
+    type: 'number',
+    min: 1,
+    max: 6,
+    step: 1,
+    default: A.option_count,
+    help: 'Quantas alternativas aparecem na tela do jogador (1 a 6).',
+  },
+  {
+    key: 'option_style',
+    label: 'Tipo de opções',
+    type: 'select',
+    default: A.option_style,
+    options: [
+      { value: 'alpha', label: 'Alfabético (A, B, C...)' },
+      { value: 'numeric', label: 'Numérico (1, 2, 3...)' },
+    ],
+    help: 'Rótulo usado nos botões de resposta.',
+  },
+  {
+    key: 'points_first',
+    label: 'Pontos para quem acertar primeiro',
+    type: 'number',
+    min: 1,
+    max: 100,
+    step: 1,
+    default: A.points_first,
+    help: 'Pontos do jogador que respondeu corretamente antes dos demais.',
+  },
+  {
+    key: 'points_later',
+    label: 'Pontos para quem acertar depois',
+    type: 'number',
+    min: 0,
+    max: 100,
+    step: 1,
+    default: A.points_later,
+    help: 'Pontos dos demais jogadores que também acertaram.',
+  },
+];
+
 export const GAME_TYPES: GameType[] = [
   {
     id: 'buzzer-order',
@@ -146,6 +223,13 @@ export const GAME_TYPES: GameType[] = [
     description:
       'Quiz em vídeo: os jogadores apertam a buzina e o apresentador pontua na ordem dos cliques.',
     fields: BUZZER_ORDER_FIELDS,
+  },
+  {
+    id: 'answers',
+    name: 'Respostas',
+    description:
+      'Quiz em vídeo com alternativas: cada jogador escolhe uma opção e o apresentador revela e corrige.',
+    fields: ANSWERS_FIELDS,
   },
 ];
 
@@ -155,17 +239,30 @@ export function getGameType(id: unknown): GameType | undefined {
 }
 
 // Defaults de um tipo, derivados dos campos do registro (fonte única de verdade).
-export function defaultConfigFor(typeId: string): BuzzerOrderConfig {
+export function defaultConfigFor(typeId: string): RoomConfig {
   const type = getGameType(typeId);
-  const config: Record<string, ConfigValue> = { ...DEFAULT_BUZZER_ORDER_CONFIG };
-  if (type) {
-    for (const field of type.fields) config[field.key] = field.default;
-  }
-  return config as BuzzerOrderConfig;
+  if (!type) return { ...DEFAULT_BUZZER_ORDER_CONFIG };
+
+  const config: Record<string, ConfigValue> = {};
+  for (const field of type.fields) config[field.key] = field.default;
+  return config as RoomConfig;
+}
+
+// Configuração de respostas com todos os campos preenchidos (tolerante a
+// salas antigas ou a um config parcial vindo do cliente).
+export function answersConfigFor(config: RoomConfig | undefined): AnswersConfig {
+  const source = config ?? {};
+  return {
+    video_url: typeof source.video_url === 'string' ? source.video_url : A.video_url,
+    option_count: typeof source.option_count === 'number' ? source.option_count : A.option_count,
+    option_style: source.option_style === 'numeric' ? 'numeric' : 'alpha',
+    points_first: typeof source.points_first === 'number' ? source.points_first : A.points_first,
+    points_later: typeof source.points_later === 'number' ? source.points_later : A.points_later,
+  };
 }
 
 export type NormalizeRoomConfigResult =
-  | { ok: true; type: GameType; config: BuzzerOrderConfig }
+  | { ok: true; type: GameType; config: RoomConfig }
   | { ok: false; error: string };
 
 function isHttpUrl(value: string): boolean {
@@ -271,5 +368,5 @@ export function normalizeRoomConfig(
     config[field.key] = selected;
   }
 
-  return { ok: true, type, config: config as BuzzerOrderConfig };
+  return { ok: true, type, config: config as RoomConfig };
 }

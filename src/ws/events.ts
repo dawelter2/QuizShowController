@@ -6,9 +6,13 @@ import {
   updateScoreCache, getRoomScores, resetRoomGame,
   getPlayerPenalty, punishPlayer, isRoundLimitReached,
   joinRoomAsPlayer, removePlayerFromRoom, kickPlayerFromRoom,
-  bindPlayerSocket, unbindPlayerSocket, listPlayerSocketIds,
+  bindPlayerSocket, unbindPlayerSocket, listPlayerSocketIds, listRoomSocketEntries,
   isActiveRoomMember, renameUser, isNameTakenInRoom, sanitizePlayerName,
+  setRoundEligiblePlayers, registerAnswer, maybeRevealAnswers,
+  revealRoundAnswers, gradeRoundAnswers, getAnswerOrder, listRoundAnswers,
 } from '../store/queries.js';
+import type { Round } from '../store/queries.js';
+import { answersConfigFor } from '../store/game-types.js';
 
 type ClientData = {
   room_id?: string;
@@ -83,6 +87,8 @@ export function setupSocketEvents(io: Server) {
       unbindPlayerSocket(roomToLeave, data.user_id, socket.id);
       socket.leave(roomToLeave);
       clientMap.delete(socket.id);
+      // Se o jogador que saiu era o último pendente, as respostas são reveladas.
+      revealAnswersIfComplete(io, roomToLeave);
       // Status completo: além do painel do apresentador, atualiza o placar/OBS
       // (o jogador que saiu deixa de pontuar na sala).
       emitRoomStatus(io, roomToLeave);
@@ -163,6 +169,7 @@ export function setupSocketEvents(io: Server) {
       }
 
       console.log(`[PLAYER] kick room=${data.room_id} user=${data.user_id} by=${presenterId}`);
+      revealAnswersIfComplete(io, data.room_id);
       emitRoomStatus(io, data.room_id);
       ack?.({ ok: true });
     });
@@ -175,7 +182,7 @@ export function setupSocketEvents(io: Server) {
 
       // Limite de rodadas configurado na criação da sala (0 = sem limite).
       if (isRoundLimitReached(data.room_id)) {
-        const limit = room.config.total_rounds;
+        const limit = room.config.total_rounds ?? 0;
         socket.emit('erro', {
           code: 'LIMITE_RODADAS',
           message: `Limite de ${limit} rodada(s) atingido. Reinicie a partida para jogar novamente.`,
@@ -191,6 +198,15 @@ export function setupSocketEvents(io: Server) {
         data.correct_answer || '',
       );
 
+      // No tipo "Respostas", a rodada começa com um snapshot dos jogadores
+      // elegíveis. Quem entrar depois aguarda a próxima rodada.
+      if (room.type === 'answers') {
+        const eligible = listRoomPlayers(data.room_id)
+          .filter(p => p.role === 'player')
+          .map(p => p.user_id);
+        setRoundEligiblePlayers(round.id, eligible);
+      }
+
       // Jogadores punidos entram na rodada com a buzina bloqueada; o contador
       // diminui a cada nova rodada.
       const punishments = listRoomPlayers(data.room_id)
@@ -202,6 +218,8 @@ export function setupSocketEvents(io: Server) {
         round_number: round.round_number,
         media_url: round.media_url,
         punishments,
+        game_type: room.type,
+        eligible_player_ids: round.eligible_player_ids,
       });
 
       // Status completo: atualiza badges de punição e contadores em todas as telas.
@@ -221,6 +239,12 @@ export function setupSocketEvents(io: Server) {
       const round = findRoundById(data.round_id);
       if (!round || round.room_id !== clientData.room_id) {
         socket.emit('erro', { code: 'RODADA_INVALIDA', message: 'Rodada não encontrada' });
+        return;
+      }
+
+      const room = findRoomById(round.room_id);
+      if (!room || room.type !== 'buzzer-order') {
+        socket.emit('erro', { code: 'TIPO_INVALIDO', message: 'Esta sala não usa buzina' });
         return;
       }
 
@@ -253,6 +277,189 @@ export function setupSocketEvents(io: Server) {
       });
     });
 
+    // ─── Respostas: jogador escolhe alternativa ────
+
+    socket.on('resposta:enviar', (
+      data: { room_id: string; round_id: string; player_id: string; option: number },
+      ack?: Ack,
+    ) => {
+      const clientData = clientMap.get(socket.id);
+      if (!clientData?.room_id || clientData.user_id !== data.player_id ||
+          !isActiveRoomMember(clientData.room_id, data.player_id)) {
+        const message = 'Jogador não está ativo na sala';
+        socket.emit('erro', { code: 'NAO_AUTORIZADO', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+
+      const room = findRoomById(clientData.room_id);
+      if (!room || room.type !== 'answers') {
+        const message = 'Esta sala não usa o tipo Respostas';
+        socket.emit('erro', { code: 'TIPO_INVALIDO', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+
+      const round = findRoundById(data.round_id);
+      if (!round || round.room_id !== room.id) {
+        const message = 'Rodada não encontrada';
+        socket.emit('erro', { code: 'RODADA_INVALIDA', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+
+      const cfg = answersConfigFor(room.config);
+      const option = Number(data.option);
+      if (!Number.isInteger(option) || option < 1 || option > cfg.option_count) {
+        const message = 'Alternativa inválida';
+        socket.emit('erro', { code: 'OPCAO_INVALIDA', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+
+      const result = registerAnswer(round.id, data.player_id, option);
+      if (!result.ok) {
+        socket.emit('erro', { code: result.code, message: result.message });
+        ack?.({ ok: false, code: result.code, error: result.message });
+        return;
+      }
+
+      // O componente de ordem das respostas recebe as alternativas ocultas
+      // (option = null) até a revelação.
+      io.to(room.id).emit('respostas:ordem', answersPayload(round));
+
+      // Cada jogador recebe apenas a própria escolha (para reconexão e abas
+      // múltiplas), sem expor a dos demais antes da revelação.
+      for (const socketId of listPlayerSocketIds(room.id, data.player_id)) {
+        io.to(socketId).emit('resposta:minha', {
+          room_id: room.id,
+          round_id: round.id,
+          option: result.event.option,
+          position: result.event.position,
+        });
+      }
+
+      if (maybeRevealAnswers(room.id, round.id)) {
+        io.to(room.id).emit('respostas:reveladas', answersPayload(round));
+        emitRoomStatus(io, room.id);
+      }
+
+      ack?.({ ok: true, position: result.event.position, option: result.event.option });
+    });
+
+    // ─── Respostas: revelar (apresentador) ─────────
+
+    socket.on('respostas:revelar', (
+      data: { room_id: string; round_id?: string },
+      ack?: Ack,
+    ) => {
+      const room = findRoomById(data.room_id);
+      const presenterId = clientMap.get(socket.id)?.user_id;
+      if (!room || !presenterId || presenterId !== room.presenter_id) {
+        const message = 'Apenas o apresentador pode revelar as respostas';
+        socket.emit('erro', { code: 'NAO_AUTORIZADO', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+      if (room.type !== 'answers') {
+        const message = 'Esta sala não usa o tipo Respostas';
+        socket.emit('erro', { code: 'TIPO_INVALIDO', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+
+      const round = data.round_id
+        ? findRoundById(data.round_id)
+        : findCurrentRound(room.id);
+      if (!round || round.room_id !== room.id) {
+        const message = 'Rodada não encontrada';
+        socket.emit('erro', { code: 'RODADA_INVALIDA', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+      if (round.status !== 'active') {
+        const message = 'A rodada já foi encerrada';
+        socket.emit('erro', { code: 'RODADA_ENCERRADA', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+      if (round.answers_graded) {
+        const message = 'Esta rodada já foi corrigida';
+        socket.emit('erro', { code: 'JA_CORRIGIDA', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+
+      const revealedNow = revealRoundAnswers(round.id);
+      const payload = answersPayload(round);
+      io.to(room.id).emit('respostas:reveladas', payload);
+      emitRoomStatus(io, room.id);
+      ack?.({ ok: true, revealed: true, changed: revealedNow });
+    });
+
+    // ─── Respostas: corrigir (apresentador) ────────
+
+    socket.on('resposta:corrigir', (
+      data: { room_id: string; round_id?: string; option: number },
+      ack?: Ack,
+    ) => {
+      const room = findRoomById(data.room_id);
+      const presenterId = clientMap.get(socket.id)?.user_id;
+      if (!room || !presenterId || presenterId !== room.presenter_id) {
+        const message = 'Apenas o apresentador pode corrigir a rodada';
+        socket.emit('erro', { code: 'NAO_AUTORIZADO', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+      if (room.type !== 'answers') {
+        const message = 'Esta sala não usa o tipo Respostas';
+        socket.emit('erro', { code: 'TIPO_INVALIDO', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+
+      const round = data.round_id
+        ? findRoundById(data.round_id)
+        : findCurrentRound(room.id);
+      if (!round || round.room_id !== room.id) {
+        const message = 'Rodada não encontrada';
+        socket.emit('erro', { code: 'RODADA_INVALIDA', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+
+      const cfg = answersConfigFor(room.config);
+      const option = Number(data.option);
+      if (!Number.isInteger(option) || option < 1 || option > cfg.option_count) {
+        const message = 'Alternativa correta inválida';
+        socket.emit('erro', { code: 'OPCAO_INVALIDA', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+
+      const result = gradeRoundAnswers(
+        round.id,
+        option,
+        cfg.points_first,
+        cfg.points_later,
+      );
+      if (!result.ok) {
+        socket.emit('erro', { code: result.code, message: result.message });
+        ack?.({ ok: false, code: result.code, error: result.message });
+        return;
+      }
+
+      const scores = getRoomScores(room.id);
+      io.to(room.id).emit('respostas:corrigidas', {
+        ...answersPayload(round),
+        correct_option: result.correct_option,
+        scores,
+      });
+      io.to(room.id).emit('placar:atualizado', { room_id: room.id, scores });
+      emitRoomStatus(io, room.id);
+      ack?.({ ok: true, correct_option: result.correct_option, scores });
+    });
+
     // ─── Pontos: alterar ───────────────────────────
 
     socket.on('pontos:alterar', (data: { room_id: string; round_id: string; player_id: string; score_delta?: number; judgment?: 'exact' | 'near' }) => {
@@ -262,12 +469,16 @@ export function setupSocketEvents(io: Server) {
         socket.emit('erro', { code: 'NAO_AUTORIZADO', message: 'Apenas o apresentador pode alterar pontos' });
         return;
       }
+      if (room.type !== 'buzzer-order') {
+        socket.emit('erro', { code: 'TIPO_INVALIDO', message: 'Use a correção de respostas nesta sala' });
+        return;
+      }
 
       // Preferir o julgamento ("certeira"/"quase"): o valor vem da configuração
       // da sala, não do cliente. score_delta continua aceito por compatibilidade.
       let delta = data.score_delta;
-      if (data.judgment === 'exact') delta = room.config.points_exact;
-      if (data.judgment === 'near') delta = room.config.points_near;
+      if (data.judgment === 'exact') delta = room.config.points_exact ?? 0;
+      if (data.judgment === 'near') delta = room.config.points_near ?? 0;
 
       if (typeof delta !== 'number' || !Number.isFinite(delta)) {
         socket.emit('erro', { code: 'PONTOS_INVALIDOS', message: 'Pontuação inválida' });
@@ -292,6 +503,12 @@ export function setupSocketEvents(io: Server) {
       if (!room || !presenterId || presenterId !== room.presenter_id) {
         const message = 'Apenas o apresentador pode aplicar punições';
         socket.emit('erro', { code: 'NAO_AUTORIZADO', message });
+        ack?.({ ok: false, error: message });
+        return;
+      }
+      if (room.type !== 'buzzer-order') {
+        const message = 'Punições não se aplicam ao tipo Respostas';
+        socket.emit('erro', { code: 'TIPO_INVALIDO', message });
         ack?.({ ok: false, error: message });
         return;
       }
@@ -399,6 +616,37 @@ export function setupSocketEvents(io: Server) {
 
 // ─── Helpers ────────────────────────────────────────
 
+// Payload do componente de ordem das respostas. As alternativas continuam
+// ocultas (option = null) até a rodada ser revelada.
+function answersPayload(round: Round) {
+  const answers = getAnswerOrder(round.id);
+  return {
+    room_id: round.room_id,
+    round_id: round.id,
+    round_number: round.round_number,
+    answers,
+    answered_count: answers.length,
+    eligible_player_ids: round.eligible_player_ids,
+    eligible_count: round.eligible_player_ids.length,
+    answers_revealed: round.answers_revealed,
+    graded: round.answers_graded,
+    correct_option: round.correct_option,
+  };
+}
+
+function revealAnswersIfComplete(io: Server, roomId: string) {
+  const room = findRoomById(roomId);
+  if (!room || room.type !== 'answers') return;
+
+  const round = findCurrentRound(roomId);
+  if (!round) return;
+
+  if (maybeRevealAnswers(roomId, round.id)) {
+    io.to(roomId).emit('respostas:reveladas', answersPayload(round));
+    emitRoomStatus(io, roomId);
+  }
+}
+
 function emitRoomStatus(io: Server, roomId: string) {
   const room = findRoomById(roomId);
   if (!room) return;
@@ -407,7 +655,7 @@ function emitRoomStatus(io: Server, roomId: string) {
   const currentRound = findCurrentRound(roomId);
   const scores = getRoomScores(roomId);
 
-  io.to(roomId).emit('sala:status', {
+  const payload = {
     room: {
       id: room.id,
       code: room.code,
@@ -434,7 +682,31 @@ function emitRoomStatus(io: Server, roomId: string) {
       round_number: currentRound.round_number,
       status: currentRound.status,
       media_url: currentRound.media_url,
-      buzzer_order: getBuzzerOrder(currentRound.id),
+      game_type: room.type,
+      buzzer_order: room.type === 'buzzer-order' ? getBuzzerOrder(currentRound.id) : [],
+      answers_revealed: currentRound.answers_revealed,
+      graded: currentRound.answers_graded,
+      correct_option: currentRound.correct_option,
+      eligible_player_ids: currentRound.eligible_player_ids,
+      answers: room.type === 'answers' ? getAnswerOrder(currentRound.id) : [],
+      answered_count: room.type === 'answers' ? listRoundAnswers(currentRound.id).length : 0,
     } : null,
-  });
+  };
+
+  io.to(roomId).emit('sala:status', payload);
+
+  // No tipo "Respostas", envia a cada jogador a própria alternativa (as
+  // demais continuam ocultas até a revelação).
+  if (room.type === 'answers' && currentRound) {
+    const answers = listRoundAnswers(currentRound.id);
+    for (const entry of listRoomSocketEntries(roomId)) {
+      const own = answers.find(a => a.player_id === entry.user_id);
+      io.to(entry.socket_id).emit('resposta:minha', {
+        room_id: roomId,
+        round_id: currentRound.id,
+        option: own?.option ?? null,
+        position: own?.position ?? null,
+      });
+    }
+  }
 }

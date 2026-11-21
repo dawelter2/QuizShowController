@@ -104,16 +104,18 @@ users ──< room_players >── rooms
 | presenter_id | UUID (FK)    | Quem criou a sala (dono)              |
 | title        | VARCHAR(100) | Nome da sessão (ex: "CineQuiz 12/05") |
 | notes        | TEXT         | Observações da sala (regras, etc.)    |
-| type         | ENUM         | Tipo de tela de jogo (`buzzer-order` = Ordem das Buzinas) |
-| config       | JSON         | Opções da sala: `quiz_url`, `total_rounds`, `points_exact`, `points_near`, `penalty_type`, `penalty_rounds`, `penalty_points` |
+| type         | ENUM         | Tipo de tela de jogo (`buzzer-order` = Ordem das Buzinas, `answers` = Respostas) |
+| config       | JSON         | Opções da sala. `buzzer-order`: `quiz_url`, `total_rounds`, `points_exact`, `points_near`, `penalty_type`, `penalty_rounds`, `penalty_points`. `answers`: `video_url`, `option_count`, `option_style`, `points_first`, `points_later` |
 | status       | ENUM         | `waiting | playing | finished`        |
 | created_at   | TIMESTAMP    |                                        |
 | ended_at     | TIMESTAMP    | Quando a sala foi encerrada           |
 
 > `config` é normalizado pelo servidor na criação (`src/store/game-types.ts`).
-> Os defaults atuais são: `total_rounds: 0` (sem limite), `points_exact: 3`,
-> `points_near: 1`, `penalty_type: 'rounds'`, `penalty_rounds: 3`,
-> `penalty_points: 3` e `quiz_url: ''`.
+> Defaults de "Ordem das Buzinas": `total_rounds: 0` (sem limite),
+> `points_exact: 3`, `points_near: 1`, `penalty_type: 'rounds'`,
+> `penalty_rounds: 3`, `penalty_points: 3` e `quiz_url: ''`.
+> Defaults de "Respostas": `video_url: ''`, `option_count: 4`,
+> `option_style: 'alpha'`, `points_first: 3`, `points_later: 1`.
 
 ### `room_players`
 
@@ -148,6 +150,10 @@ users ──< room_players >── rooms
 | status         | ENUM        | `waiting | active | done`             |
 | started_at     | TIMESTAMP   | Quando o apresentador liberou buzinas |
 | ended_at       | TIMESTAMP   | Quando o apresentador finalizou       |
+| answers_revealed | BOOLEAN   | Tipo Respostas: alternativas já visíveis ao host |
+| answers_graded | BOOLEAN     | Tipo Respostas: rodada já corrigida   |
+| correct_option | INT         | Tipo Respostas: alternativa correta (1..6) |
+| eligible_player_ids | JSON   | Snapshot dos jogadores que podem responder nesta rodada |
 
 ### `buzzer_events`
 
@@ -168,14 +174,17 @@ users ──< room_players >── rooms
 | id           | UUID        | Chave primária                        |
 | round_id     | UUID (FK)   | Rodada                                 |
 | player_id    | UUID (FK)   | Jogador que respondeu                  |
-| text         | TEXT        | Resposta escrita                       |
-| submitted_at | TIMESTAMP   |                                        |
-| judgment     | ENUM        | `na_mosca | raspando | errado | none` |
-| score_delta  | INT         | Pontos atribuídos (+3, +1, 0)        |
-| judged_by    | UUID (FK)   | Apresentador que julgou               |
-| judged_at    | TIMESTAMP   |                                        |
+| option       | INT         | Alternativa escolhida (1..option_count) |
+| position     | INT         | Ordem de chegada da resposta (1 = primeiro) |
+| submitted_at | TIMESTAMP   | Momento do clique                     |
+| is_correct   | BOOLEAN     | Preenchido na correção da rodada      |
+| awarded_points | INT       | Pontos atribuídos (+points_first, +points_later ou 0) |
 
 > `(round_id, player_id)` é único — uma resposta por jogador por rodada.
+> A alternativa (`option`) fica oculta para os outros clientes até
+> `rounds.answers_revealed = true`; o próprio jogador recebe a sua por evento
+> personalizado (`resposta:minha`). No tipo "Ordem das Buzinas" a mesma
+> entidade histórica `answers` pode ser usada para a resposta digitada.
 
 ---
 

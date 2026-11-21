@@ -38,7 +38,7 @@ function startRound(roomId) {
 }
 
 test('catálogo expõe "Ordem das Buzinas" com os defaults atuais', () => {
-  assert.equal(GAME_TYPES.length, 1);
+  assert.equal(GAME_TYPES.length, 2);
   const type = getGameType('buzzer-order');
   assert.ok(type);
   assert.equal(type.name, 'Ordem das Buzinas');

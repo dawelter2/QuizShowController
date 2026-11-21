@@ -24,6 +24,18 @@ const FALLBACK_GAME_TYPES = [
       { key: 'penalty_points', label: 'Pontos a subtrair', type: 'number', min: 0, max: 100, step: 1, default: 3, show_when: { key: 'penalty_type', equals: 'points' }, help: 'Quantos pontos são retirados do placar do jogador.' },
     ],
   },
+  {
+    id: 'answers',
+    name: 'Respostas',
+    description: 'Quiz em vídeo com alternativas: cada jogador escolhe uma opção e o apresentador revela e corrige.',
+    fields: [
+      { key: 'video_url', label: 'URL do vídeo no YouTube', type: 'url', format: 'youtube', placeholder: 'https://www.youtube.com/watch?v=...', default: '', help: 'Opcional. Se preencher, o vídeo já vem carregado no painel do apresentador.' },
+      { key: 'option_count', label: 'Quantidade de opções', type: 'number', min: 1, max: 6, step: 1, default: 4, help: 'Quantas alternativas aparecem na tela do jogador (1 a 6).' },
+      { key: 'option_style', label: 'Tipo de opções', type: 'select', default: 'alpha', options: [{ value: 'alpha', label: 'Alfabético (A, B, C...)' }, { value: 'numeric', label: 'Numérico (1, 2, 3...)' }], help: 'Rótulo usado nos botões de resposta.' },
+      { key: 'points_first', label: 'Pontos para quem acertar primeiro', type: 'number', min: 1, max: 100, step: 1, default: 3, help: 'Pontos do jogador que respondeu corretamente antes dos demais.' },
+      { key: 'points_later', label: 'Pontos para quem acertar depois', type: 'number', min: 0, max: 100, step: 1, default: 1, help: 'Pontos dos demais jogadores que também acertaram.' },
+    ],
+  },
 ];
 
 function loadGameTypes() {

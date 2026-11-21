@@ -81,6 +81,10 @@ GET /api/game-types → Catálogo de tipos de sala + opções do formulário
 > O lobby renderiza o formulário de criação a partir de `fields`. Campos com
 > `show_when` só aparecem quando a opção referenciada tem o valor indicado.
 
+O catálogo também expõe o tipo **`answers`** ("Respostas") com os campos:
+`video_url` (URL YouTube), `option_count` (1–6, default 4), `option_style`
+(`alpha`/`numeric`), `points_first` (default 3) e `points_later` (default 1).
+
 ---
 
 ### Salas
@@ -312,10 +316,16 @@ Apresentador libera buzinas e inicia nova rodada.
     "media_url": "https://youtube.com/...",
     "punishments": [
       { "player_id": "uuid", "rounds_remaining": 3 }
-    ]
+    ],
+    "game_type": "answers",
+    "eligible_player_ids": ["uuid", "uuid"]
   }
 }
 ```
+
+> No tipo `answers`, `eligible_player_ids` é o snapshot de quem pode responder
+> nesta rodada; quem entrar depois aguarda a próxima. No tipo `buzzer-order` a
+> lista vem vazia e o campo `punishments` continua valendo.
 
 ---
 
@@ -352,7 +362,121 @@ Jogador apertou a buzina.
 
 ---
 
-#### `resposta:escrever`
+#### `resposta:enviar` (tipo Respostas)
+
+Jogador escolhe uma alternativa. **Só vale uma vez por rodada** — a escolha não
+pode ser revertida nem trocada.
+
+```json
+{
+  "event": "resposta:enviar",
+  "data": {
+    "room_id": "uuid",
+    "round_id": "uuid",
+    "player_id": "uuid",
+    "option": 2
+  }
+}
+```
+
+**Servidor valida:**
+- rodada ativa e ainda não revelada/corrigida;
+- jogador elegível (snapshot do início da rodada);
+- `option` entre `1` e `config.option_count`;
+- jogador ainda não respondeu (`DUPLICATE`).
+
+**Servidor emite para todos:** `respostas:ordem`
+
+```json
+{
+  "event": "respostas:ordem",
+  "data": {
+    "round_id": "uuid",
+    "answers": [
+      { "player_id": "uuid", "player_name": "Ana", "position": 1, "option": null, "timestamp": "..." },
+      { "player_id": "uuid", "player_name": "Bob", "position": 2, "option": null, "timestamp": "..." }
+    ],
+    "answered_count": 2,
+    "eligible_count": 4,
+    "answers_revealed": false,
+    "graded": false,
+    "correct_option": null
+  }
+}
+```
+
+> `option` fica `null` até a revelação. O jogador que respondeu recebe a própria
+> alternativa em um evento personalizado `resposta:minha`
+> (`{ round_id, option, position }`), sem ver a dos demais.
+
+Quando todos os elegíveis ainda na sala responderam, o servidor revela sozinho e
+emite `respostas:reveladas` com as mesmas chaves, mas com `option` preenchido e
+`answers_revealed: true`.
+
+---
+
+#### `respostas:revelar` (tipo Respostas)
+
+O apresentador revela as respostas antes de todos responderem (jogador AFK).
+
+```json
+{
+  "event": "respostas:revelar",
+  "data": { "room_id": "uuid", "round_id": "uuid" }
+}
+```
+
+**Servidor emite para todos:** `respostas:reveladas` (payload acima) e
+`sala:status`.
+
+---
+
+#### `resposta:corrigir` (tipo Respostas)
+
+O apresentador escolhe a alternativa correta da rodada. Só é permitido depois
+da revelação e uma única vez.
+
+```json
+{
+  "event": "resposta:corrigir",
+  "data": { "room_id": "uuid", "round_id": "uuid", "option": 2 }
+}
+```
+
+**Servidor:**
+1. Percorre as respostas na ordem de chegada;
+2. O primeiro acerto recebe `config.points_first`; os demais acertos recebem
+   `config.points_later`; erros recebem `0`;
+3. Atualiza o `score_cache` dos jogadores;
+4. Emite `respostas:corrigidas`, `placar:atualizado` e `sala:status` para todos.
+
+```json
+{
+  "event": "respostas:corrigidas",
+  "data": {
+    "round_id": "uuid",
+    "correct_option": 2,
+    "answers_revealed": true,
+    "graded": true,
+    "answers": [
+      { "player_id": "uuid", "player_name": "Ana", "position": 1, "option": 2, "is_correct": true, "awarded_points": 3 },
+      { "player_id": "uuid", "player_name": "Bob", "position": 2, "option": 1, "is_correct": false, "awarded_points": 0 },
+      { "player_id": "uuid", "player_name": "Carol", "position": 3, "option": 2, "is_correct": true, "awarded_points": 1 }
+    ],
+    "scores": [ { "player_id": "uuid", "player_name": "Ana", "score": 3 } ]
+  }
+}
+```
+
+> Com **Auto-próxima rodada** ligado, o painel chama `rodada:proxima` depois da
+> correção. Desligado, espera o clique do apresentador.
+
+---
+
+#### `resposta:escrever` (legado, Ordem das Buzinas)
+
+> Reservado para a resposta digitada do tipo buzina. O fluxo principal atual usa
+> apenas a buzina; o tipo Respostas usa `resposta:enviar` com alternativas.
 
 Jogador digitou/modificou a resposta (em tempo real enquanto digita, ou ao submeter).
 
@@ -576,7 +700,11 @@ Renomeia o usuário sem trocar de identidade/sessão.
 | `rodada:iniciada` | Todos | Apresentador iniciou rodada |
 | `rodada:proxima` | Todos | Apresentador avançou rodada |
 | `buzina:ordem` | Todos | Alguém apertou a buzina |
-| `resposta:atualizada` | Apresentador | Jogador digitou resposta |
+| `respostas:ordem` | Todos | Alguém registrou uma alternativa (opções ocultas) |
+| `respostas:reveladas` | Todos | Todas responderam ou o host revelou manualmente |
+| `respostas:corrigidas` | Todos | Host escolheu a alternativa correta e os pontos foram aplicados |
+| `resposta:minha` | Só o próprio jogador | Alternativa escolhida por ele (para reconexão) |
+| `resposta:atualizada` | Apresentador | Jogador digitou resposta (fluxo legado da buzina) |
 | `placar:atualizado` | Todos | Apresentador alterou pontos |
 | `jogador:punido` | Todos | Apresentador aplicou a punição configurada (rodadas ou pontos) |
 | `erro` | Quem enviou | Validação falhou |
@@ -638,9 +766,16 @@ Renomeia o usuário sem trocar de identidade/sessão.
       "round_number": 3,
       "status": "active",
       "media_url": "https://...",
-      "buzzer_order": [
-        { "player_id": "uuid", "player_name": "Ana", "position": 1 }
-      ]
+      "game_type": "answers",
+      "buzzer_order": [],
+      "answers_revealed": true,
+      "graded": false,
+      "correct_option": null,
+      "eligible_player_ids": ["uuid", "uuid"],
+      "answers": [
+        { "player_id": "uuid", "player_name": "Ana", "position": 1, "option": 2, "is_correct": null, "awarded_points": null }
+      ],
+      "answered_count": 1
     }
   }
 }
@@ -675,7 +810,10 @@ Renomeia o usuário sem trocar de identidade/sessão.
 | Entrar na sala (conectar)     |      | ✅        |
 | Iniciar rodada                |      | ✅        |
 | Apertar buzina                |      | ✅        |
-| Escrever resposta             |      | ✅        |
+| Escolher alternativa (Respostas) |   | ✅        |
+| Revelar respostas (Respostas) |      | ✅        |
+| Corrigir rodada (Respostas)   |      | ✅        |
+| Escrever resposta (legado)    |      | ✅        |
 | Alterar pontos                |      | ✅        |
 | Aplicar punição (3 rodadas)   |      | ✅        |
 | Próxima rodada                |      | ✅        |
