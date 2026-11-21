@@ -300,6 +300,12 @@ function loadVideo() {
     toast('URL do YouTube inválida');
     return;
   }
+  openVideo(url, videoId);
+}
+
+// Abre o painel e carrega o player. Usado pelo botão "Carregar" e pela URL
+// configurada na criação da sala (carregamento automático).
+function openVideo(url, videoId) {
   state.videoUrl = url;
   state.videoId = videoId;
   state.showVideo = true;
@@ -514,9 +520,13 @@ if (window.__PRESENTER_DEMO__) {
       $('pres-round-room-title').textContent = roomTitle;
       document.title = roomTitle + ' — Apresentador';
 
-      // URL configurada na criação da sala (opcional).
+      // URL configurada na criação da sala (opcional): já carrega o vídeo.
       state.quizUrl = (room.config && room.config.quiz_url) || '';
       $('video-url').value = state.quizUrl;
+      if (state.quizUrl) {
+        const videoId = extractYouTubeId(state.quizUrl);
+        if (videoId) openVideo(state.quizUrl, videoId);
+      }
       updateRoundDisplay(1);
 
       connectPresenterSocket();

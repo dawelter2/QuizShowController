@@ -31,7 +31,7 @@
   catálogo do servidor (`GET /api/game-types`) e o lobby monta o formulário a
   partir dessa metadata.
 - Opções da sala "Ordem das Buzinas" (a configuração atual é o default):
-  - **URL do quiz no YouTube** — opcional; já vem preenchida no painel do apresentador
+  - **URL do quiz no YouTube** — opcional; já é carregada automaticamente no painel do apresentador
   - **Número de rodadas** — `0` = sem limite
   - **Pontuação certeira** — default `3`
   - **Pontuação quase** — default `1`
