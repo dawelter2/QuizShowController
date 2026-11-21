@@ -103,10 +103,17 @@ users ──< room_players >── rooms
 | code         | VARCHAR(4)   | Código único para entrar na sala      |
 | presenter_id | UUID (FK)    | Quem criou a sala (dono)              |
 | title        | VARCHAR(100) | Nome da sessão (ex: "CineQuiz 12/05") |
-| notes        | TEXT         | Observações da sala (link YouTube, regras, etc.) |
+| notes        | TEXT         | Observações da sala (regras, etc.)    |
+| type         | ENUM         | Tipo de tela de jogo (`buzzer-order` = Ordem das Buzinas) |
+| config       | JSON         | Opções da sala: `quiz_url`, `total_rounds`, `points_exact`, `points_near`, `penalty_type`, `penalty_rounds`, `penalty_points` |
 | status       | ENUM         | `waiting | playing | finished`        |
 | created_at   | TIMESTAMP    |                                        |
 | ended_at     | TIMESTAMP    | Quando a sala foi encerrada           |
+
+> `config` é normalizado pelo servidor na criação (`src/store/game-types.ts`).
+> Os defaults atuais são: `total_rounds: 0` (sem limite), `points_exact: 3`,
+> `points_near: 1`, `penalty_type: 'rounds'`, `penalty_rounds: 3`,
+> `penalty_points: 3` e `quiz_url: ''`.
 
 ### `room_players`
 
@@ -121,8 +128,8 @@ users ──< room_players >── rooms
 | claimed_at   | TIMESTAMP   | Última entrada/adoção; reserva o nome por 10 s antes do socket conectar |
 | last_online_at | TIMESTAMP | Última vez que teve socket ativo (null = nunca conectou) |
 | score_cache  | INT         | Score total (desnormalizado)          |
-| penalty_start_round | INT  | Primeira rodada sem buzinar (0 = sem punição) |
-| penalty_until_round | INT  | Última rodada sem buzinar (0 = sem punição) |
+| penalty_start_round | INT  | Primeira rodada sem buzinar (0 = sem punição; só quando `penalty_type = rounds`) |
+| penalty_until_round | INT  | Última rodada sem buzinar (0 = sem punição; só quando `penalty_type = rounds`) |
 
 > `online` não é persistido: é derivado dos sockets conectados (`presenceMap`).
 > O estado é mantido em memória; `data/quiz.db` não é usado por esta versão.

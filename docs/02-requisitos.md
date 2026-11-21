@@ -10,6 +10,11 @@
 ### Sala
 
 - Criar sala gera um código único (ex: 4 letras/números)
+- Na criação, o apresentador escolhe o **tipo de jogo** (hoje apenas "Ordem das Buzinas") e as opções da sala:
+  - URL do quiz no YouTube (opcional)
+  - Número de rodadas (0 = sem limite)
+  - Pontuação certeira e pontuação quase
+  - Tipo de punição: rodadas sem buzinar ou subtrair pontos
 - Apresentador vê o código para compartilhar
 - Jogadores entram na sala inserindo o código
 - Sala só permite um apresentador
@@ -18,7 +23,7 @@
 
 - Botão **Começar Rodada** — libera buzinas para os jogadores e reseta campos de resposta
 - Botão **Próxima Rodada** — limpa campos de resposta, mantém score
-- Controles de **+3** e **+1** pontos para acertos e **Errou** para aplicar a punição de 3 rodadas
+- Botões de acerto com os valores configurados na sala (**certeira** e **quase**) e **Errou** para aplicar a punição configurada
 - Visualização da **ordem das buzinas** (quem apertou primeiro)
 - Visualização das **respostas escritas** por cada jogador
 
@@ -38,10 +43,12 @@
 ### Pontuação
 
 - Score acumulado por jogador através das rodadas
-- Acertos somam pontos definidos pelo apresentador (+3 ou +1)
-- **Errar não remove pontos**: o jogador recebe uma punição de **3 rodadas sem poder buzinar** (R+1, R+2 e R+3 após o erro)
-- A punição não acumula: se o jogador já está punido, uma nova punição é ignorada
-- A punição termina sozinha após a 3ª rodada; **Reiniciar Partida** limpa todas as punições
+- Acertos somam os pontos definidos na configuração da sala (default: `+3` certeira, `+1` quase)
+- **Erro** aplica a punição configurada na sala:
+  - **Rodadas de punição** (default 3): jogador fica sem poder buzinar nas N rodadas seguintes
+  - **Subtrair pontos** (default 3): jogador perde N pontos na hora e continua podendo buzinar
+- A punição por rodadas não acumula: se o jogador já está punido, uma nova punição é ignorada
+- A punição por rodadas termina sozinha após a última rodada; **Reiniciar Partida** limpa todas as punições
 - Placar visível para todos (apresentador, jogadores, OBS)
 - Score nunca reseta entre rodadas
 

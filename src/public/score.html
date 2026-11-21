@@ -357,7 +357,7 @@
         deltaHtml = '<span class="rank-delta '+dcls+'">'+sign+delta+'</span>';
       }
 
-      // Punição por erro: 3 rodadas sem buzinar, sem alterar pontos.
+      // Punição por rodadas configurada na sala (punição por pontos não gera badge).
       var penalty = s.penalty;
       var penaltyHtml = penalty
         ? '<span class="rank-penalty" title="Punido: '+penalty.rounds_remaining+' rodada(s) sem buzinar">🚫 '+penalty.rounds_remaining+'</span>'
