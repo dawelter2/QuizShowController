@@ -12,9 +12,9 @@ Acesse pelo navegador — não é necessário instalar nada. Para usar como font
 
 ## Funcionalidades
 
-- **Sala de Quiz** — Criação de salas com perguntas, respostas e categorias
+- **Sala de Quiz configurável** — Tipo de jogo ("Ordem das Buzinas"), URL do quiz no YouTube, número de rodadas, pontuação certeira/quase e tipo de punição
 - **Sistema de Buzzer** — Detecção de quem apertou primeiro (ordem de chegada)
-- **Punição por erro** — Quem erra fica 3 rodadas sem poder buzinar, sem perder pontos
+- **Punição por erro configurável** — Rodadas sem buzinar (default 3) ou subtração de pontos (default 3)
 - **Temporizador** — Contagem regressiva para responder cada pergunta
 - **Painel do Apresentador** — Interface para controlar o jogo (mostrar pergunta, revelar resposta, pontuar)
 - **Tela de Transmissão (OBS)** — Layout limpo e personalizável para ser capturado como fonte de navegador no OBS
@@ -64,7 +64,7 @@ npm run dev
 ## Testes
 
 ```bash
-# Compila o TypeScript e roda os testes de identidade/presença e de punição
+# Compila o TypeScript e roda os testes de identidade/presença, punição e configuração de sala
 npm test
 ```
 

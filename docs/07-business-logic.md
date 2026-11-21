@@ -26,6 +26,17 @@
 ## 2. Sala
 
 - Código gerado: 4 caracteres alfanuméricos maiúsculos (ex: `A3F9`)
+- Ao criar, o apresentador escolhe o **tipo de jogo** e as opções da sala.
+  Hoje existe apenas **Ordem das Buzinas**; novos tipos são registrados no
+  catálogo do servidor (`GET /api/game-types`) e o lobby monta o formulário a
+  partir dessa metadata.
+- Opções da sala "Ordem das Buzinas" (a configuração atual é o default):
+  - **URL do quiz no YouTube** — opcional; já vem preenchida no painel do apresentador
+  - **Número de rodadas** — `0` = sem limite
+  - **Pontuação certeira** — default `3`
+  - **Pontuação quase** — default `1`
+  - **Tipo de punição** — rodadas sem buzinar (default `3`) ou subtrair pontos (default `3`)
+- Os valores são validados no servidor na criação e ficam gravados na sala
 - Uma sala só pode ter **um apresentador**
 - Jogadores ilimitados entram pelo código
 - A sala existe enquanto o apresentador estiver online (ou em memória)
@@ -60,16 +71,20 @@
 - **Ordem**: definida pelo timestamp do servidor no momento do clique.
 - **Campo de texto**: o jogador pode editar sua resposta **enquanto a rodada estiver ativa**.
 - **Respostas vazias**: se o jogador apertou a buzina mas não escreveu nada, o apresentador vê o campo vazio.
-- **Punição**: quem erra fica **3 rodadas sem poder buzinar** (R+1, R+2 e R+3 após o erro).
+- **Punição**: depende do tipo configurado na sala — **N rodadas sem buzinar** (default 3) ou **subtrair N pontos** (default 3).
+- **Limite de rodadas**: quando a sala tem `total_rounds > 0`, o servidor recusa iniciar rodadas além do limite; `0` = sem limite.
 
 ## 4. Pontuação
 
 - Score é **acumulativo** entre rodadas
-- O apresentador controla os acertos:
-  - Botões de atalho: `+3` (na mosca) e `+1` (raspando)
-  - Erro: botão **Errou**, que aplica **3 rodadas de punição** em vez de retirar pontos
-- A punição não acumula: se o jogador já está punido, uma nova punição é ignorada
-- O contador da punição diminui a cada rodada (3 → 2 → 1) e libera a buzina depois da terceira
+- O apresentador controla os acertos com dois botões, cujos valores vêm da configuração da sala:
+  - **Certeira** (default `+3`)
+  - **Quase** (default `+1`)
+- **Errou** aplica a punição configurada:
+  - **Rodadas de punição**: fica sem buzinar nas próximas N rodadas (R+1 … R+N)
+  - **Subtrair pontos**: perde N pontos na hora e continua podendo buzinar
+- A punição por rodadas não acumula: se o jogador já está punido, uma nova punição é ignorada
+- O contador da punição diminui a cada rodada (N → N−1 → … → 1) e libera a buzina depois da última
 - Score inicial de cada jogador = 0
 - Score nunca reseta, a menos que o apresentador reinicie a partida
 

@@ -5,6 +5,9 @@
 Layout centralizado com:
 - Logotipo do sistema
 - Campo para **criar nova sala** (gera código único)
+  - Dropdown de **tipo de jogo** (hoje: "Ordem das Buzinas")
+  - Opções do tipo escolhido: URL do quiz no YouTube, número de rodadas,
+    pontuação certeira, pontuação quase e tipo de punição (rodadas ou pontos)
 - Campo para **entrar em sala existente** (insere o código)
 - Botão de acesso rápido: "Entrar como Apresentador"
 

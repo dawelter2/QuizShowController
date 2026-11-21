@@ -7,6 +7,141 @@ function show(screen) {
   if (screen === 'screen-lobby') showLobbyMain();
 }
 
+// Fallback local usado só se GET /api/game-types falhar. A fonte de verdade é
+// src/store/game-types.ts; mantenha em sincronia ao adicionar tipos de jogo.
+const FALLBACK_GAME_TYPES = [
+  {
+    id: 'buzzer-order',
+    name: 'Ordem das Buzinas',
+    description: 'Quiz em vídeo: os jogadores apertam a buzina e o apresentador pontua na ordem dos cliques.',
+    fields: [
+      { key: 'quiz_url', label: 'URL do quiz no YouTube', type: 'url', format: 'youtube', placeholder: 'https://www.youtube.com/watch?v=...', default: '', help: 'Opcional. Se preencher, a URL já vem carregada no painel do apresentador.' },
+      { key: 'total_rounds', label: 'Número de rodadas', type: 'number', min: 0, max: 200, step: 1, default: 0, help: '0 = sem limite. Com limite, a partida termina após a última rodada.' },
+      { key: 'points_exact', label: 'Pontuação certeira', type: 'number', min: 1, max: 100, step: 1, default: 3, help: 'Pontos para quem acerta na mosca.' },
+      { key: 'points_near', label: 'Pontuação quase', type: 'number', min: 0, max: 100, step: 1, default: 1, help: 'Pontos para quem chega perto.' },
+      { key: 'penalty_type', label: 'Tipo de punição', type: 'select', default: 'rounds', options: [{ value: 'rounds', label: 'Rodadas de punição' }, { value: 'points', label: 'Subtrair pontos' }], help: 'O que acontece quando o apresentador clica em "Errou".' },
+      { key: 'penalty_rounds', label: 'Rodadas de punição', type: 'number', min: 1, max: 50, step: 1, default: 3, show_when: { key: 'penalty_type', equals: 'rounds' }, help: 'Quantas rodadas o jogador fica sem poder buzinar.' },
+      { key: 'penalty_points', label: 'Pontos a subtrair', type: 'number', min: 0, max: 100, step: 1, default: 3, show_when: { key: 'penalty_type', equals: 'points' }, help: 'Quantos pontos são retirados do placar do jogador.' },
+    ],
+  },
+];
+
+function loadGameTypes() {
+  return api('/game-types').then(res => {
+    const types = res && res.game_types;
+    state.roomTypes = Array.isArray(types) && types.length > 0 ? types : FALLBACK_GAME_TYPES;
+    return state.roomTypes;
+  }).catch(() => {
+    state.roomTypes = FALLBACK_GAME_TYPES;
+    return state.roomTypes;
+  });
+}
+
+function getGameTypes() {
+  return (state.roomTypes && state.roomTypes.length) ? state.roomTypes : FALLBACK_GAME_TYPES;
+}
+
+function selectedGameType() {
+  const select = $('room-type');
+  return getGameTypes().find(type => type.id === (select ? select.value : ''));
+}
+
+function fillRoomTypeSelect() {
+  const select = $('room-type');
+  if (!select) return;
+
+  const types = getGameTypes();
+  select.innerHTML = types.map(type =>
+    `<option value="${escapeHtml(type.id)}">${escapeHtml(type.name)}</option>`
+  ).join('');
+  renderRoomConfigFields();
+}
+
+// Desenha os campos de configuração do tipo escolhido a partir da metadata
+// do servidor (url/number/select + show_when para campos condicionais).
+function renderRoomConfigFields() {
+  const container = $('room-config-fields');
+  const description = $('room-type-description');
+  const type = selectedGameType();
+  if (!container) return;
+
+  if (!type) {
+    container.innerHTML = '';
+    if (description) description.textContent = '';
+    return;
+  }
+
+  if (description) description.textContent = type.description || '';
+  container.innerHTML = type.fields.map(field => {
+    const id = 'cfg-' + field.key;
+    let control;
+    if (field.type === 'select') {
+      control = `<select id="${id}" data-config-key="${field.key}">${field.options.map(option =>
+        `<option value="${escapeHtml(option.value)}"${option.value === field.default ? ' selected' : ''}>${escapeHtml(option.label)}</option>`
+      ).join('')}</select>`;
+    } else if (field.type === 'number') {
+      control = `<input id="${id}" data-config-key="${field.key}" type="number" step="${field.step || 1}" min="${field.min}" max="${field.max}" value="${field.default}">`;
+    } else {
+      control = `<input id="${id}" data-config-key="${field.key}" type="url" value="${escapeHtml(field.default)}"${field.placeholder ? ` placeholder="${escapeHtml(field.placeholder)}"` : ''}>`;
+    }
+
+    return `<div class="config-field" data-field-key="${field.key}">
+      <label for="${id}">${escapeHtml(field.label)}</label>
+      ${control}
+      ${field.help ? `<span class="field-help">${escapeHtml(field.help)}</span>` : ''}
+    </div>`;
+  }).join('');
+
+  container.querySelectorAll('[data-config-key]').forEach(el => {
+    el.addEventListener('change', updateConditionalFields);
+  });
+  updateConditionalFields();
+}
+
+function updateConditionalFields() {
+  const container = $('room-config-fields');
+  const type = selectedGameType();
+  if (!container || !type) return;
+
+  type.fields.forEach(field => {
+    if (!field.show_when) return;
+    const wrapper = container.querySelector(`.config-field[data-field-key="${field.key}"]`);
+    const source = container.querySelector(`[data-config-key="${field.show_when.key}"]`);
+    if (!wrapper) return;
+    const visible = !!source && String(source.value) === String(field.show_when.equals);
+    wrapper.classList.toggle('hidden', !visible);
+  });
+}
+
+function collectRoomConfig() {
+  const config = {};
+  // Ignora campos condicionais ocultos: o servidor aplica o default deles e
+  // assim um valor inválido digitado antes de trocar o tipo não bloqueia o envio.
+  document.querySelectorAll('#room-config-fields .config-field:not(.hidden) [data-config-key]').forEach(el => {
+    let value;
+    if (el.type === 'number') {
+      value = el.value === '' ? undefined : Number(el.value);
+    } else {
+      value = el.value.trim();
+    }
+    if (value !== undefined) config[el.dataset.configKey] = value;
+  });
+  return config;
+}
+
+function validateRoomConfigFields() {
+  // Só valida campos visíveis: os condicionais ocultos mantêm valores antigos.
+  const wrappers = document.querySelectorAll('#room-config-fields .config-field:not(.hidden)');
+  for (const wrapper of wrappers) {
+    for (const input of wrapper.querySelectorAll('[data-config-key]')) {
+      if (input.checkValidity()) continue;
+      input.reportValidity();
+      return false;
+    }
+  }
+  return true;
+}
+
 function handleLogin() {
   const name = $('login-name').value.trim();
   if (!name) return toast('Digite seu nome');
@@ -42,7 +177,12 @@ function showCreateRoom() {
   $('lobby-main-actions').classList.add('hidden');
   $('join-form').classList.add('hidden');
   $('create-form').classList.remove('hidden');
-  $('room-name').focus();
+
+  const ready = state.roomTypes ? Promise.resolve() : loadGameTypes();
+  ready.then(() => {
+    if (!$('room-type').options.length) fillRoomTypeSelect();
+    $('room-name').focus();
+  });
 }
 
 function showLobbyMain() {
@@ -83,8 +223,13 @@ function refreshActiveRooms() {
 function handleCreateRoom() {
   const title = $('room-name').value.trim();
   if (!title) return toast('Dê um nome para a sala');
+  if (!$('room-type').value) return toast('Escolha o tipo de jogo');
+  if (!validateRoomConfigFields()) return;
 
-  api('/rooms', { user_id: state.user.id, title }).then(res => {
+  const type = $('room-type').value;
+  const config = collectRoomConfig();
+
+  api('/rooms', { user_id: state.user.id, title, type, config }).then(res => {
     if (!res.room) return toast('Erro ao criar sala: ' + (res.error || 'desconhecido'));
     localStorage.setItem('last_room_code', res.room.code);
     location.href = '/apresentador?sala=' + res.room.code;

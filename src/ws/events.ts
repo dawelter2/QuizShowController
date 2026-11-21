@@ -4,7 +4,7 @@ import {
   createRound, closeRound, findCurrentRound, findRoundById, countRounds,
   registerBuzz, getBuzzerOrder,
   updateScoreCache, getRoomScores, resetRoomGame,
-  getPlayerPenalty, punishPlayer, PENALTY_ROUNDS,
+  getPlayerPenalty, punishPlayer, isRoundLimitReached,
   joinRoomAsPlayer, removePlayerFromRoom, kickPlayerFromRoom,
   bindPlayerSocket, unbindPlayerSocket, listPlayerSocketIds,
   isActiveRoomMember, renameUser, isNameTakenInRoom, sanitizePlayerName,
@@ -173,6 +173,16 @@ export function setupSocketEvents(io: Server) {
       const room = findRoomById(data.room_id);
       if (!room) return;
 
+      // Limite de rodadas configurado na criação da sala (0 = sem limite).
+      if (isRoundLimitReached(data.room_id)) {
+        const limit = room.config.total_rounds;
+        socket.emit('erro', {
+          code: 'LIMITE_RODADAS',
+          message: `Limite de ${limit} rodada(s) atingido. Reinicie a partida para jogar novamente.`,
+        });
+        return;
+      }
+
       const roundNumber = countRounds(data.room_id) + 1;
       const round = createRound(
         data.room_id,
@@ -245,7 +255,7 @@ export function setupSocketEvents(io: Server) {
 
     // ─── Pontos: alterar ───────────────────────────
 
-    socket.on('pontos:alterar', (data: { room_id: string; round_id: string; player_id: string; score_delta: number }) => {
+    socket.on('pontos:alterar', (data: { room_id: string; round_id: string; player_id: string; score_delta?: number; judgment?: 'exact' | 'near' }) => {
       const room = findRoomById(data.room_id);
       const presenterId = clientMap.get(socket.id)?.user_id;
       if (!room || !presenterId || presenterId !== room.presenter_id) {
@@ -253,10 +263,21 @@ export function setupSocketEvents(io: Server) {
         return;
       }
 
+      // Preferir o julgamento ("certeira"/"quase"): o valor vem da configuração
+      // da sala, não do cliente. score_delta continua aceito por compatibilidade.
+      let delta = data.score_delta;
+      if (data.judgment === 'exact') delta = room.config.points_exact;
+      if (data.judgment === 'near') delta = room.config.points_near;
+
+      if (typeof delta !== 'number' || !Number.isFinite(delta)) {
+        socket.emit('erro', { code: 'PONTOS_INVALIDOS', message: 'Pontuação inválida' });
+        return;
+      }
+
       // Atualizar score_cache
       const players = listRoomPlayers(data.room_id);
       const player = players.find(p => p.user_id === data.player_id);
-      const newScore = (player?.score_cache || 0) + data.score_delta;
+      const newScore = (player?.score_cache || 0) + delta;
       updateScoreCache(data.room_id, data.player_id, newScore);
 
       const scores = getRoomScores(data.room_id);
@@ -307,15 +328,40 @@ export function setupSocketEvents(io: Server) {
       }
 
       const player = listRoomPlayers(data.room_id).find(p => p.user_id === data.player_id);
+
+      // Punição por pontos: desconta do placar e não bloqueia a buzina.
+      if (result.penalty_type === 'points') {
+        io.to(data.room_id).emit('jogador:punido', {
+          player_id: data.player_id,
+          player_name: player?.name ?? 'Jogador',
+          penalty_type: 'points',
+          points_subtracted: result.points_subtracted,
+          new_score: result.new_score,
+        });
+        io.to(data.room_id).emit('placar:atualizado', {
+          room_id: data.room_id,
+          scores: getRoomScores(data.room_id),
+        });
+        emitRoomStatus(io, data.room_id);
+        ack?.({
+          ok: true,
+          penalty_type: 'points',
+          points_subtracted: result.points_subtracted,
+          new_score: result.new_score,
+        });
+        return;
+      }
+
       io.to(data.room_id).emit('jogador:punido', {
         player_id: data.player_id,
         player_name: player?.name ?? 'Jogador',
-        duration_rounds: PENALTY_ROUNDS,
+        penalty_type: 'rounds',
+        duration_rounds: result.penalty.rounds_remaining,
         start_round: result.penalty.start_round,
         rounds_remaining: result.penalty.rounds_remaining,
       });
       emitRoomStatus(io, data.room_id);
-      ack?.({ ok: true, penalty: result.penalty });
+      ack?.({ ok: true, penalty_type: 'rounds', penalty: result.penalty });
     });
 
     // ─── Rodada: próxima ───────────────────────────
@@ -368,7 +414,10 @@ function emitRoomStatus(io: Server, roomId: string) {
       title: room.title,
       notes: room.notes,
       status: room.status,
+      type: room.type,
+      config: room.config,
     },
+    rounds_played: countRounds(roomId),
     players: players.map(p => ({
       user_id: p.user_id,
       name: p.name,

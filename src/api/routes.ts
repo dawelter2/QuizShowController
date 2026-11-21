@@ -5,6 +5,7 @@ import {
   listRoomPlayers, joinRoomAsPlayer, kickPlayerFromRoom,
   renameUser, sanitizePlayerName,
 } from '../store/queries.js';
+import { GAME_TYPES, normalizeRoomConfig } from '../store/game-types.js';
 
 export const router = Router();
 
@@ -59,6 +60,13 @@ router.patch('/auth', (req: Request, res: Response) => {
   res.json({ user: updated });
 });
 
+// ─── Game Types ─────────────────────────────────────
+
+// Catálogo de tipos de tela de jogo + metadata dos campos do formulário.
+router.get('/game-types', (_req: Request, res: Response) => {
+  res.json({ game_types: GAME_TYPES });
+});
+
 // ─── Rooms ──────────────────────────────────────────
 
 router.get('/rooms', (req: Request, res: Response) => {
@@ -75,14 +83,20 @@ router.get('/rooms', (req: Request, res: Response) => {
 });
 
 router.post('/rooms', (req: Request, res: Response) => {
-  const { user_id, title, notes } = req.body;
+  const { user_id, title, notes, type, config } = req.body ?? {};
 
   if (!user_id) {
     res.status(400).json({ error: 'user_id é obrigatório' });
     return;
   }
 
-  const room = createRoom(user_id, title || '', notes || '');
+  const normalized = normalizeRoomConfig(type ?? 'buzzer-order', config);
+  if (!normalized.ok) {
+    res.status(400).json({ error: normalized.error });
+    return;
+  }
+
+  const room = createRoom(user_id, title || '', notes || '', normalized.type.id, normalized.config);
   res.json({ room });
 });
 
@@ -97,12 +111,30 @@ router.get('/rooms/:code', (req: Request, res: Response) => {
 });
 
 router.put('/rooms/:id', (req: Request, res: Response) => {
-  const { title, notes } = req.body;
-  const room = updateRoom(req.params.id as string, { title, notes });
-  if (!room) {
+  const { title, notes, config } = req.body ?? {};
+  const existing = findRoomById(req.params.id as string);
+  if (!existing) {
     res.status(404).json({ error: 'Sala não encontrada' });
     return;
   }
+
+  let nextConfig;
+  if (config !== undefined) {
+    if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+      res.status(400).json({ error: 'Configuração da sala inválida.' });
+      return;
+    }
+
+    // Merge com a configuração atual para permitir atualizações parciais.
+    const normalized = normalizeRoomConfig(existing.type, { ...existing.config, ...config });
+    if (!normalized.ok) {
+      res.status(400).json({ error: normalized.error });
+      return;
+    }
+    nextConfig = normalized.config;
+  }
+
+  const room = updateRoom(req.params.id as string, { title, notes, config: nextConfig });
   res.json({ room });
 });
 

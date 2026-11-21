@@ -1,12 +1,43 @@
 // Estado específico do apresentador
 state.currentRoundId = null;
+state.currentRoundNumber = null;
+state.roundsPlayed = 0;
 state.buzzerOrder = [];
 state.autoNextRound = false;
 state.showVideo = false;
 state.videoUrl = '';
 state.videoId = '';
+state.quizUrl = '';
 state.judgedPlayers = new Set();
 state.prevScoresByPid = {};
+
+// Configuração da sala (valores default = comportamento antigo do jogo).
+const PRESENTER_DEFAULT_CONFIG = {
+  quiz_url: '',
+  total_rounds: 0,
+  points_exact: 3,
+  points_near: 1,
+  penalty_type: 'rounds',
+  penalty_rounds: 3,
+  penalty_points: 3,
+};
+
+function roomConfig() {
+  return { ...PRESENTER_DEFAULT_CONFIG, ...(state.room?.config || {}) };
+}
+
+function roundsLimitReached() {
+  const total = Number(roomConfig().total_rounds) || 0;
+  return total > 0 && (state.roundsPlayed || 0) >= total;
+}
+
+function updateRoundDisplay(roundNumber) {
+  const total = Number(roomConfig().total_rounds) || 0;
+  const numEl = $('pres-round-num');
+  const totalEl = $('pres-round-total');
+  if (numEl && roundNumber != null) numEl.textContent = roundNumber;
+  if (totalEl) totalEl.textContent = total > 0 ? ` de ${total}` : '';
+}
 
 function renderPresenterPlayers(players) {
   state.players = players; // Salva para re-render
@@ -129,6 +160,12 @@ function renderBuzzerOrderList() {
 
   const firstWithTs = rawOrder.find(o => o.timestamp);
   const firstTs = firstWithTs ? new Date(firstWithTs.timestamp).getTime() : null;
+  const cfg = roomConfig();
+  const exactPoints = Number(cfg.points_exact) || 0;
+  const nearPoints = Number(cfg.points_near) || 0;
+  const punishTitle = cfg.penalty_type === 'points'
+    ? `Errou: −${cfg.penalty_points} ponto(s)`
+    : `Errou: ${cfg.penalty_rounds} rodada(s) sem buzinar`;
 
   container.innerHTML = pending.map((o, i) => {
     let deltaHtml = '';
@@ -144,9 +181,9 @@ function renderBuzzerOrderList() {
         <span class="buzz-name">${escapeHtml(o.player_name || 'Jogador')}</span>
         ${deltaHtml}
         <div class="buzz-actions">
-          <button class="btn-plus" onclick="changeScore('${o.player_id}', 3)" title="+3 pontos">+3</button>
-          <button class="btn-plus" onclick="changeScore('${o.player_id}', 1)" title="+1 ponto">+1</button>
-          <button class="btn-punish" onclick="punishPlayer('${o.player_id}')" title="Errou: 3 rodadas sem buzinar" aria-label="Punir por 3 rodadas">Errou</button>
+          <button class="btn-plus" onclick="changeScore('${o.player_id}', 'exact')" title="+${exactPoints} ponto(s)">+${exactPoints}</button>
+          <button class="btn-plus" onclick="changeScore('${o.player_id}', 'near')" title="+${nearPoints} ponto(s)">+${nearPoints}</button>
+          <button class="btn-punish" onclick="punishPlayer('${o.player_id}')" title="${escapeHtml(punishTitle)}" aria-label="Punir jogador">Errou</button>
         </div>
       </div>
     `;
@@ -156,10 +193,15 @@ function renderBuzzerOrderList() {
 function updateRoundButton(isRoundActive) {
   const btn = $('btn-round-control');
   if (!btn) return;
-  
+
+  btn.disabled = false;
   if (isRoundActive) {
     btn.textContent = '⏭ Próxima Rodada';
     btn.className = 'btn btn-warning';
+  } else if (roundsLimitReached()) {
+    btn.textContent = '🏁 Rodadas encerradas';
+    btn.className = 'btn btn-outline';
+    btn.disabled = true;
   } else {
     btn.textContent = '▶ Começar Rodada';
     btn.className = 'btn btn-success';
@@ -170,6 +212,7 @@ function applyRoundSnapshot(round) {
   if (round) {
     const sameRound = state.currentRoundId === round.id;
     state.currentRoundId = round.id;
+    state.currentRoundNumber = round.round_number;
     state.buzzerOrder = round.buzzer_order || [];
     // Ao reconectar no meio da rodada, mantém quem já foi pontuado fora da ordem.
     if (!sameRound) state.judgedPlayers.clear();
@@ -178,14 +221,19 @@ function applyRoundSnapshot(round) {
     for (const entry of state.buzzerOrder) {
       if (punishedIds.has(entry.player_id)) state.judgedPlayers.add(entry.player_id);
     }
-    $('pres-round-num').textContent = round.round_number;
+    updateRoundDisplay(round.round_number);
     updateRoundButton(true);
     renderBuzzerOrder(state.buzzerOrder);
   } else {
     state.currentRoundId = null;
+    state.currentRoundNumber = null;
     state.buzzerOrder = [];
     state.judgedPlayers.clear();
-    $('pres-round-num').textContent = '1';
+    const total = Number(roomConfig().total_rounds) || 0;
+    const nextNumber = total > 0
+      ? Math.min(state.roundsPlayed + 1, total)
+      : state.roundsPlayed + 1;
+    updateRoundDisplay(nextNumber);
     updateRoundButton(false);
     renderBuzzerOrder([]);
   }
@@ -202,6 +250,10 @@ function handleRoundControl() {
 }
 
 function handleStartRound() {
+  if (roundsLimitReached()) {
+    toast('Todas as rodadas já foram jogadas. Reinicie a partida para jogar novamente.');
+    return;
+  }
   state.socket.emit('rodada:iniciar', {
     room_id: state.room.id,
     media_url: '',
@@ -282,7 +334,8 @@ function closeVideo() {
   $('video-container').classList.add('hidden');
   $('video-container').innerHTML = '<div class="video-empty" id="video-empty">Cole a URL do YouTube e clique em Carregar</div>';
   $('video-empty').classList.remove('hidden');
-  $('video-url').value = '';
+  // Mantém a URL configurada na sala para recarregar sem digitar de novo.
+  $('video-url').value = state.quizUrl || '';
   $('video-panel').classList.add('hidden');
   $('btn-video-toggle').classList.remove('active');
   document.querySelector('.content').classList.remove('layout-video');
@@ -295,18 +348,19 @@ function extractYouTubeId(url) {
   return m ? m[1] : null;
 }
 
-function changeScore(playerId, delta) {
+function changeScore(playerId, judgment) {
   if (!state.currentRoundId) return toast('Inicie uma rodada primeiro');
   // Ao pontuar, o jogador sai imediatamente da lista de ordem dos botões.
   if (state.buzzerOrder.some(o => o.player_id === playerId)) {
     state.judgedPlayers.add(playerId);
     renderBuzzerOrderList();
   }
+  // O servidor calcula o delta a partir da configuração da sala.
   state.socket.emit('pontos:alterar', {
     room_id: state.room.id,
     round_id: state.currentRoundId,
     player_id: playerId,
-    score_delta: delta,
+    judgment,
   });
   if (state.autoNextRound) {
     handleNextRound();
@@ -383,6 +437,7 @@ function connectPresenterSocket() {
 
   state.socket.on('sala:status', (data) => {
     state.room = { ...state.room, ...data.room };
+    state.roundsPlayed = Number(data.rounds_played) || 0;
     renderPresenterPlayers(data.players);
     applyRoundSnapshot(data.current_round);
     renderPresenterScores(data.scores);
@@ -392,9 +447,11 @@ function connectPresenterSocket() {
 
   state.socket.on('rodada:iniciada', (data) => {
     state.currentRoundId = data.round_id;
+    state.currentRoundNumber = data.round_number;
+    state.roundsPlayed = data.round_number;
     state.buzzerOrder = [];
     state.judgedPlayers.clear();
-    $('pres-round-num').textContent = data.round_number;
+    updateRoundDisplay(data.round_number);
     updateRoundButton(true);
     renderBuzzerOrder([]);
     renderPresenterPlayers(state.players || []);
@@ -413,18 +470,27 @@ function connectPresenterSocket() {
       state.judgedPlayers.add(data.player_id);
       renderBuzzerOrderList();
     }
-    toast(`${data.player_name} punido: ${data.duration_rounds} rodadas sem buzinar`);
+    if (data.penalty_type === 'points') {
+      toast(`${data.player_name} errou: −${data.points_subtracted} ponto(s)`);
+    } else {
+      toast(`${data.player_name} punido: ${data.duration_rounds} rodada(s) sem buzinar`);
+    }
   });
 
   state.socket.on('rodada:proxima', () => {
     state.currentRoundId = null;
+    state.currentRoundNumber = null;
     state.buzzerOrder = [];
     state.judgedPlayers.clear();
     updateRoundButton(false);
     renderBuzzerOrder([]);
     renderPresenterPlayers(state.players || []);
-    
-    // Inicia a próxima rodada automaticamente após o encerramento da anterior
+
+    // Inicia a próxima rodada automaticamente, exceto quando o limite acabou.
+    if (roundsLimitReached()) {
+      toast('🏁 Fim! Todas as rodadas foram jogadas.');
+      return;
+    }
     setTimeout(() => handleStartRound(), 500);
   });
 
@@ -447,6 +513,12 @@ if (window.__PRESENTER_DEMO__) {
       $('pres-title').textContent = roomTitle;
       $('pres-round-room-title').textContent = roomTitle;
       document.title = roomTitle + ' — Apresentador';
+
+      // URL configurada na criação da sala (opcional).
+      state.quizUrl = (room.config && room.config.quiz_url) || '';
+      $('video-url').value = state.quizUrl;
+      updateRoundDisplay(1);
+
       connectPresenterSocket();
     })
     .catch(() => { /* redirect já feito por setupAuth/requireRoom */ });

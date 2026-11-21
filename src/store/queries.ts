@@ -1,4 +1,6 @@
 import { v4 as uuid } from 'uuid';
+import { DEFAULT_BUZZER_ORDER_CONFIG, defaultConfigFor } from './game-types.js';
+import type { BuzzerOrderConfig, GameTypeId } from './game-types.js';
 
 // ─── Types ───────────────────────────────────────────
 
@@ -16,6 +18,10 @@ export type Room = {
   presenter_id: string;
   title: string;
   notes: string;
+  // Tipo de tela de jogo (por enquanto só "Ordem das Buzinas").
+  type: GameTypeId;
+  // Opções escolhidas na criação da sala; sempre normalizadas no servidor.
+  config: BuzzerOrderConfig;
   status: 'waiting' | 'playing' | 'finished';
   created_at: string;
   ended_at: string | null;
@@ -38,7 +44,7 @@ export type RoomPlayer = {
   penalty_until_round: number;
 };
 
-export const PENALTY_ROUNDS = 3;
+export const PENALTY_ROUNDS = DEFAULT_BUZZER_ORDER_CONFIG.penalty_rounds;
 
 export type PlayerPenalty = {
   active: boolean;
@@ -164,15 +170,25 @@ function generateRoomCode(): string {
 
 // ─── Rooms ───────────────────────────────────────────
 
-export function createRoom(presenterId: string, title: string, notes: string): Room {
+export function createRoom(
+  presenterId: string,
+  title: string,
+  notes: string,
+  type: GameTypeId = 'buzzer-order',
+  config: BuzzerOrderConfig = defaultConfigFor(type),
+): Room {
   const id = uuid();
   let code: string;
   do { code = generateRoomCode(); } while (roomCodeIndex.has(code));
 
   const now = new Date().toISOString();
-  const room: Room = { id, code, presenter_id: presenterId, title, notes, status: 'waiting', created_at: now, ended_at: null, last_activity_at: now };
+  const room: Room = {
+    id, code, presenter_id: presenterId, title, notes,
+    type, config: { ...config },
+    status: 'waiting', created_at: now, ended_at: null, last_activity_at: now,
+  };
   roomsMap.set(id, room);
-  console.log(`[DEBUG] Sala criada: ${title} (${code})`);
+  console.log(`[DEBUG] Sala criada: ${title} (${code}) tipo=${type}`);
   roomCodeIndex.set(code, id);
   roomPlayersMap.set(id, new Map());
   roomRoundsMap.set(id, []);
@@ -195,11 +211,15 @@ export function listActiveRooms(): Room[] {
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
-export function updateRoom(id: string, data: { title?: string; notes?: string }): Room | undefined {
+export function updateRoom(
+  id: string,
+  data: { title?: string; notes?: string; config?: BuzzerOrderConfig },
+): Room | undefined {
   const room = roomsMap.get(id);
   if (!room) return undefined;
   if (data.title !== undefined) room.title = data.title;
   if (data.notes !== undefined) room.notes = data.notes;
+  if (data.config !== undefined) room.config = { ...data.config };
   touchRoom(id);
   return room;
 }
@@ -529,13 +549,14 @@ export function isPlayerPunished(
 }
 
 export type PunishPlayerResult =
-  | { ok: true; penalty: PlayerPenalty }
+  | { ok: true; penalty_type: 'rounds'; penalty: PlayerPenalty; points_subtracted: 0 }
+  | { ok: true; penalty_type: 'points'; penalty: null; points_subtracted: number; new_score: number }
   | { ok: false; code: 'ROOM_NOT_FOUND' | 'PLAYER_NOT_FOUND' | 'NO_ROUND'; message: string };
 
 export function punishPlayer(
   roomId: string,
   userId: string,
-  duration = PENALTY_ROUNDS,
+  duration?: number,
 ): PunishPlayerResult {
   const room = roomsMap.get(roomId);
   if (!room) return { ok: false, code: 'ROOM_NOT_FOUND', message: 'Sala não encontrada' };
@@ -550,18 +571,38 @@ export function punishPlayer(
     return { ok: false, code: 'NO_ROUND', message: 'Inicie uma rodada primeiro' };
   }
 
+  const config = { ...DEFAULT_BUZZER_ORDER_CONFIG, ...room.config };
+
+  // Punição por pontos: desconta na hora e não bloqueia a buzina.
+  if (config.penalty_type === 'points') {
+    const points = Math.max(0, config.penalty_points);
+    player.score_cache -= points;
+    touchRoom(roomId);
+    return {
+      ok: true,
+      penalty_type: 'points',
+      penalty: null,
+      points_subtracted: points,
+      new_score: player.score_cache,
+    };
+  }
+
   // Sem empilhamento: se já existe punição pendente/ativa, mantém a atual.
   const existing = getPlayerPenalty(roomId, userId, currentRound);
-  if (existing) return { ok: true, penalty: existing };
+  if (existing) {
+    return { ok: true, penalty_type: 'rounds', penalty: existing, points_subtracted: 0 };
+  }
 
+  const rounds = Math.max(1, duration ?? config.penalty_rounds);
   const start = currentRound + 1;
-  const until = currentRound + Math.max(1, duration);
+  const until = currentRound + rounds;
   player.penalty_start_round = start;
   player.penalty_until_round = until;
   touchRoom(roomId);
 
   return {
     ok: true,
+    penalty_type: 'rounds',
     penalty: {
       active: false,
       starts_next_round: true,
@@ -569,6 +610,7 @@ export function punishPlayer(
       start_round: start,
       until_round: until,
     },
+    points_subtracted: 0,
   };
 }
 
@@ -624,6 +666,16 @@ export function findCurrentRound(roomId: string): Round | undefined {
 
 export function countRounds(roomId: string): number {
   return (roomRoundsMap.get(roomId) ?? []).length;
+}
+
+// Limite de rodadas configurado na sala (0 = sem limite).
+export function getRoundLimit(roomId: string): number {
+  return roomsMap.get(roomId)?.config.total_rounds ?? 0;
+}
+
+export function isRoundLimitReached(roomId: string): boolean {
+  const limit = getRoundLimit(roomId);
+  return limit > 0 && countRounds(roomId) >= limit;
 }
 
 // ─── Buzzer Events ───────────────────────────────────

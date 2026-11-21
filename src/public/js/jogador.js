@@ -226,6 +226,18 @@ function connectPlayerSocket() {
 
   state.socket.on('jogador:punido', (data) => {
     if (!data) return;
+
+    // Punição por pontos: o placar é atualizado por placar:atualizado.
+    if (data.penalty_type === 'points') {
+      if (data.player_id === state.user.id) {
+        toast(`Você errou! −${data.points_subtracted} ponto(s).`);
+        if (navigator.vibrate) navigator.vibrate([80, 50, 80]);
+      } else {
+        toast(`${data.player_name} errou: −${data.points_subtracted} ponto(s)`);
+      }
+      return;
+    }
+
     if (data.player_id === state.user.id) {
       setPenaltyBanner({
         active: false,

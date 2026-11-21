@@ -47,12 +47,48 @@ Renomeia o usuário sem criar outra identidade (mesmo `user_id`, mesma sessão).
 
 ---
 
+### Tipos de Jogo
+
+```
+GET /api/game-types → Catálogo de tipos de sala + opções do formulário
+```
+
+**Resposta:**
+```json
+{
+  "game_types": [
+    {
+      "id": "buzzer-order",
+      "name": "Ordem das Buzinas",
+      "description": "Quiz em vídeo: os jogadores apertam a buzina e o apresentador pontua na ordem dos cliques.",
+      "fields": [
+        { "key": "quiz_url", "label": "URL do quiz no YouTube", "type": "url", "format": "youtube", "default": "", "help": "..." },
+        { "key": "total_rounds", "label": "Número de rodadas", "type": "number", "min": 0, "max": 200, "default": 0 },
+        { "key": "points_exact", "label": "Pontuação certeira", "type": "number", "min": 1, "max": 100, "default": 3 },
+        { "key": "points_near", "label": "Pontuação quase", "type": "number", "min": 0, "max": 100, "default": 1 },
+        { "key": "penalty_type", "label": "Tipo de punição", "type": "select", "default": "rounds", "options": [
+          { "value": "rounds", "label": "Rodadas de punição" },
+          { "value": "points", "label": "Subtrair pontos" }
+        ] },
+        { "key": "penalty_rounds", "label": "Rodadas de punição", "type": "number", "min": 1, "max": 50, "default": 3, "show_when": { "key": "penalty_type", "equals": "rounds" } },
+        { "key": "penalty_points", "label": "Pontos a subtrair", "type": "number", "min": 0, "max": 100, "default": 3, "show_when": { "key": "penalty_type", "equals": "points" } }
+      ]
+    }
+  ]
+}
+```
+
+> O lobby renderiza o formulário de criação a partir de `fields`. Campos com
+> `show_when` só aparecem quando a opção referenciada tem o valor indicado.
+
+---
+
 ### Salas
 
 ```
 POST /api/rooms         → Criar sala
 GET  /api/rooms/:code   → Buscar sala pelo código
-PUT  /api/rooms/:id     → Atualizar sala (título, notas)
+PUT  /api/rooms/:id     → Atualizar sala (título, notas, configuração)
 DELETE /api/rooms/:id   → Encerrar sala
 ```
 
@@ -62,7 +98,9 @@ DELETE /api/rooms/:id   → Encerrar sala
 |-------|------|-----------|
 | user_id | string | ID do usuário (vira apresentador) |
 | title | string | Nome da sessão (opcional) |
-| notes | string | Link do vídeo, observações (opcional) |
+| notes | string | Observações (opcional) |
+| type | string | Tipo de jogo (default `buzzer-order`) |
+| config | object | Opções da sala; campos ausentes usam o default do tipo |
 
 **Resposta:**
 ```json
@@ -71,12 +109,24 @@ DELETE /api/rooms/:id   → Encerrar sala
     "id": "uuid",
     "code": "X7K9",
     "title": "CineQuiz 12/05",
-    "notes": "https://youtube.com/playlist?list=...",
-    "status": "waiting",
-    "presenter": { "id": "uuid", "name": "Mestre" }
+    "notes": "",
+    "type": "buzzer-order",
+    "config": {
+      "quiz_url": "https://www.youtube.com/watch?v=...",
+      "total_rounds": 10,
+      "points_exact": 3,
+      "points_near": 1,
+      "penalty_type": "rounds",
+      "penalty_rounds": 3,
+      "penalty_points": 3
+    },
+    "status": "waiting"
   }
 }
 ```
+
+> Configuração inválida (tipo desconhecido, URL inválida, número fora do
+> intervalo) → `400 { "error": "..." }`.
 
 #### `GET /api/rooms/:code`
 
@@ -89,6 +139,8 @@ Busca pelo código de 4 letras. Usado para validar se a sala existe antes de ent
     "id": "uuid",
     "code": "X7K9",
     "title": "CineQuiz 12/05",
+    "type": "buzzer-order",
+    "config": { "total_rounds": 10, "points_exact": 3, "points_near": 1, "penalty_type": "rounds", "penalty_rounds": 3, "penalty_points": 3, "quiz_url": "" },
     "status": "waiting",
     "player_count": 3
   }
@@ -101,6 +153,7 @@ Busca pelo código de 4 letras. Usado para validar se a sala existe antes de ent
 |-------|------|-----------|
 | title | string | Novo título (opcional) |
 | notes | string | Novas observações (opcional) |
+| config | object | Configuração parcial; é mesclada com a atual e validada (opcional) |
 
 **Resposta:** `{ "room": { ... } }`
 
@@ -233,6 +286,10 @@ Se a identidade for adotada no socket, o servidor também emite `sessao:adotada`
 
 Apresentador libera buzinas e inicia nova rodada.
 
+> Se a sala foi criada com `config.total_rounds > 0` e o limite já foi
+> atingido, o servidor emite `erro` com `code: "LIMITE_RODADAS"` e não cria a
+> rodada. Com `total_rounds = 0` (default) não há limite.
+
 ```json
 {
   "event": "rodada:iniciar",
@@ -330,7 +387,9 @@ Jogador digitou/modificou a resposta (em tempo real enquanto digita, ou ao subme
 
 #### `pontos:alterar`
 
-Apresentador soma pontos de um acerto (`+3` na mosca / `+1` raspando).
+Apresentador soma pontos de um acerto. O servidor calcula o delta a partir da
+configuração da sala: `judgment: "exact"` usa `config.points_exact` (default
+`+3`) e `judgment: "near"` usa `config.points_near` (default `+1`).
 
 ```json
 {
@@ -339,10 +398,13 @@ Apresentador soma pontos de um acerto (`+3` na mosca / `+1` raspando).
     "room_id": "uuid",
     "round_id": "uuid",
     "player_id": "uuid",
-    "score_delta": 3
+    "judgment": "exact"
   }
 }
 ```
+
+> `score_delta` (número) continua aceito por compatibilidade quando `judgment`
+> não é enviado.
 
 **Servidor:**
 1. Atualiza o `score_cache` do jogador na sala
@@ -366,7 +428,7 @@ Apresentador soma pontos de um acerto (`+3` na mosca / `+1` raspando).
 
 #### `jogador:punir`
 
-Apresentador aplica a punição de **3 rodadas sem buzinar** (não altera pontos).
+Apresentador aplica a punição configurada na sala.
 
 ```json
 {
@@ -378,8 +440,9 @@ Apresentador aplica a punição de **3 rodadas sem buzinar** (não altera pontos
 **Servidor:**
 1. Valida que o socket pertence ao `presenter_id`, que existe rodada ativa e que o
    jogador apertou a buzina nesta rodada.
-2. Define `penalty_start_round = R+1` e `penalty_until_round = R+3`.
-3. Emite `jogador:punido` para todos:
+2. Se `config.penalty_type = "rounds"`: define `penalty_start_round = R+1` e
+   `penalty_until_round = R+N` (`N = config.penalty_rounds`, default 3) e emite
+   `jogador:punido` com `penalty_type: "rounds"`:
 
 ```json
 {
@@ -387,6 +450,7 @@ Apresentador aplica a punição de **3 rodadas sem buzinar** (não altera pontos
   "data": {
     "player_id": "uuid",
     "player_name": "Bob",
+    "penalty_type": "rounds",
     "duration_rounds": 3,
     "start_round": 4,
     "rounds_remaining": 3
@@ -394,8 +458,27 @@ Apresentador aplica a punição de **3 rodadas sem buzinar** (não altera pontos
 }
 ```
 
-4. Emite `sala:status` para atualizar badges/contadores.
-5. **Ack:** `{ "ok": true, "penalty": { ... } }` ou `{ "ok": false, "error": "..." }`.
+3. Se `config.penalty_type = "points"`: desconta `config.penalty_points`
+   (default 3) do placar na hora, sem bloquear a buzina, e emite:
+
+```json
+{
+  "event": "jogador:punido",
+  "data": {
+    "player_id": "uuid",
+    "player_name": "Bob",
+    "penalty_type": "points",
+    "points_subtracted": 3,
+    "new_score": 5
+  }
+}
+```
+
+4. Emite `placar:atualizado` (punição por pontos) e `sala:status` para atualizar
+   badges/contadores.
+5. **Ack:** `{ "ok": true, "penalty_type": "rounds", "penalty": { ... } }`,
+   `{ "ok": true, "penalty_type": "points", "points_subtracted": 3, "new_score": 5 }`
+   ou `{ "ok": false, "error": "..." }`.
 
 Erros: `NAO_AUTORIZADO`, `SEM_RODADA_ATIVA`, `RODADA_INVALIDA`, `JOGADOR_NAO_BUZINOU`.
 
@@ -495,7 +578,7 @@ Renomeia o usuário sem trocar de identidade/sessão.
 | `buzina:ordem` | Todos | Alguém apertou a buzina |
 | `resposta:atualizada` | Apresentador | Jogador digitou resposta |
 | `placar:atualizado` | Todos | Apresentador alterou pontos |
-| `jogador:punido` | Todos | Apresentador aplicou punição de 3 rodadas |
+| `jogador:punido` | Todos | Apresentador aplicou a punição configurada (rodadas ou pontos) |
 | `erro` | Quem enviou | Validação falhou |
 
 #### `sala:status`
@@ -509,8 +592,19 @@ Renomeia o usuário sem trocar de identidade/sessão.
       "code": "X7K9",
       "title": "CineQuiz 12/05",
       "status": "playing",
-      "notes": "https://..."
+      "notes": "",
+      "type": "buzzer-order",
+      "config": {
+        "quiz_url": "https://www.youtube.com/watch?v=...",
+        "total_rounds": 10,
+        "points_exact": 3,
+        "points_near": 1,
+        "penalty_type": "rounds",
+        "penalty_rounds": 3,
+        "penalty_points": 3
+      }
     },
+    "rounds_played": 3,
     "players": [
       {
         "user_id": "uuid",
