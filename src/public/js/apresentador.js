@@ -342,7 +342,7 @@ function closeVideo() {
 }
 
 function extractYouTubeId(url) {
-  var m = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/|youtube-nocookie\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+  var m = url.match(/^https?:\/\/(?:www\.|m\.|music\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/|youtube-nocookie\.com\/embed\/)([a-zA-Z0-9_-]{11})(?:[?&#].*)?$/i);
   if (m) return m[1];
   m = url.match(/^([a-zA-Z0-9_-]{11})$/);
   return m ? m[1] : null;

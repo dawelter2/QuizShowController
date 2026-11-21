@@ -92,6 +92,13 @@ test('normaliza configuração válida e preenche campos ausentes', () => {
   assert.equal(empty.ok, true);
   assert.deepEqual(empty.config, DEFAULT_BUZZER_ORDER_CONFIG);
 
+  // URL do YouTube com parâmetros extras continua válida.
+  const withParams = normalizeRoomConfig('buzzer-order', {
+    quiz_url: 'https://www.youtube.com/watch?v=abc12345678&t=10s',
+  });
+  assert.equal(withParams.ok, true);
+  assert.equal(withParams.config.quiz_url, 'https://www.youtube.com/watch?v=abc12345678&t=10s');
+
   // Número em branco (só espaços) usa o default em vez de virar 0.
   const blankNumber = normalizeRoomConfig('buzzer-order', { total_rounds: '   ' });
   assert.equal(blankNumber.ok, true);
@@ -105,6 +112,7 @@ test('rejeita tipo, URL, números e opções inválidas', () => {
     { type: 'buzzer-order', config: { quiz_url: 'youtube.com/watch?v=abc' } },
     { type: 'buzzer-order', config: { quiz_url: 'ftp://example.com/video' } },
     { type: 'buzzer-order', config: { quiz_url: 'https://example.com/quiz' } },
+    { type: 'buzzer-order', config: { quiz_url: 'https://notyoutube.com/watch?v=abc12345678' } },
     { type: 'buzzer-order', config: { quiz_url: 'https://www.youtube.com/playlist?list=abc' } },
     { type: 'buzzer-order', config: { quiz_url: [] } },
     { type: 'buzzer-order', config: { total_rounds: -1 } },

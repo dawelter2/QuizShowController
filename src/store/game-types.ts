@@ -178,11 +178,13 @@ function isHttpUrl(value: string): boolean {
 }
 
 // Mesmo formato aceito pelo player do painel (watch/shorts/embed/youtu.be).
-const YOUTUBE_ID_PATTERN =
-  /(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/|youtube-nocookie\.com\/embed\/)([a-zA-Z0-9_-]{11})/;
+// O host é ancorado para não aceitar URLs de outros domínios que contenham
+// "youtube.com" no caminho.
+const YOUTUBE_URL_PATTERN =
+  /^https?:\/\/(?:www\.|m\.|music\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/|youtube-nocookie\.com\/embed\/)([a-zA-Z0-9_-]{11})(?:[?&#].*)?$/i;
 
 function isYouTubeUrl(value: string): boolean {
-  return YOUTUBE_ID_PATTERN.test(value);
+  return YOUTUBE_URL_PATTERN.test(value);
 }
 
 // Valida e normaliza a configuração vinda do cliente. Campos ausentes usam o
