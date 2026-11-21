@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cenário de teste — Respostas</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0f0f1a; color: #e0e0e0; min-height: 100vh; }
+  input, button, select { font: inherit; }
+  button { -webkit-tap-highlight-color: transparent; }
+  .hidden { display: none !important; }
+  h1 { font-size: 1.35rem; color: #fff; }
+  h2 { font-size: 1rem; color: #c8c8dc; margin-bottom: .6rem; }
+  h3 { font-size: .78rem; color: #a0a0b8; text-transform: uppercase; letter-spacing: .07em; margin: 1rem 0 .5rem; }
+  p { color: #888; }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .7rem 1rem; background: #1a1a2e; border-bottom: 1px solid #2a2a3e; flex-wrap: wrap; }
+  .topbar .badges { display: flex; gap: .4rem; flex-wrap: wrap; }
+  .badge { display: inline-flex; align-items: center; padding: .3rem .65rem; border-radius: 6px; font-size: .75rem; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+  .badge-outline { background: #16162a; border: 1px solid #2a2a3e; color: #a0a0b8; }
+  .badge-primary { background: #6c5ce7; color: #fff; }
+  .badge-open { background: #00b894; color: #fff; }
+  .badge-closed { background: #fdcb6e; color: #1a1a2e; }
+  .badge-graded { background: #00b894; color: #fff; }
+
+  .layout { display: grid; grid-template-columns: minmax(360px, 1fr) minmax(420px, 1.15fr); gap: 1rem; padding: 1rem; max-width: 1500px; margin: 0 auto; align-items: start; }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+
+  .card { background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
+  .setup-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; margin: .4rem 0 .8rem; }
+  .field { display: flex; flex-direction: column; gap: .25rem; }
+  .field label { font-size: .72rem; font-weight: 700; color: #a0a0b8; }
+  .field input, .field select { width: 100%; padding: .55rem .6rem; border-radius: 8px; border: 1px solid #2a2a3e; background: #16162a; color: #e0e0e0; outline: none; }
+  .field input:focus, .field select:focus { border-color: #6c5ce7; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; border: none; border-radius: 8px; padding: .6rem 1rem; font-weight: 700; font-size: .85rem; cursor: pointer; transition: filter .15s, transform .15s; }
+  .btn:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
+  .btn:disabled { opacity: .42; cursor: not-allowed; filter: none; transform: none; }
+  .btn-primary { background: #6c5ce7; color: #fff; }
+  .btn-success { background: #00b894; color: #fff; }
+  .btn-warning { background: #fdcb6e; color: #1a1a2e; }
+  .btn-outline { background: transparent; border: 1px solid #2a2a3e; color: #a0a0b8; }
+  .btn-block { width: 100%; }
+  .actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+  .actions .btn { flex: 1 1 140px; }
+
+  .host-head { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .5rem; }
+  .room-code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 1.5rem; font-weight: 900; color: #6c5ce7; }
+  .toggle-row { display: flex; align-items: center; gap: .5rem; margin-top: .7rem; font-size: .8rem; color: #a0a0b8; font-weight: 700; }
+  .toggle-row input { width: 18px; height: 18px; accent-color: #6c5ce7; }
+
+  .answer-row { display: flex; align-items: center; gap: .45rem; padding: .45rem .55rem; margin-bottom: .3rem; border: 1px solid #2a2a3e; border-radius: 8px; background: #232342; }
+  .answer-row.first { border-color: #fdcb6e; background: linear-gradient(90deg, rgba(253,203,110,.14), #232342); }
+  .answer-row.is-correct { border-color: rgba(0,184,148,.65); background: linear-gradient(90deg, rgba(0,184,148,.16), #232342); }
+  .answer-row.is-wrong { opacity: .7; }
+  .answer-pos { width: 25px; height: 25px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: #6c5ce7; color: #fff; font-size: .7rem; font-weight: 900; }
+  .answer-row.first .answer-pos { background: #fdcb6e; color: #1a1a2e; }
+  .answer-name { flex: 1; min-width: 0; font-weight: 700; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .answer-chip { min-width: 34px; text-align: center; padding: .15rem .4rem; border-radius: 6px; font-size: .8rem; font-weight: 900; background: #16162a; border: 1px solid #3a3a52; color: #fdcb6e; }
+  .answer-chip.hidden-answer { color: #8a8aa0; border-style: dashed; }
+  .answer-time { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: .62rem; color: #a29bfe; font-weight: 700; }
+  .answer-points { min-width: 34px; text-align: right; font-size: .72rem; font-weight: 800; }
+  .answer-points.positive { color: #2ee5a8; }
+  .answer-points.zero { color: #8a8aa0; }
+  .waiting { font-size: .72rem; color: #8a8aa0; margin-top: .35rem; }
+  .panel-empty { color: #636e72; font-size: .82rem; padding: .5rem 0; }
+
+  .choice-grid { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .choice { flex: 1 1 44px; min-width: 44px; height: 44px; border-radius: 8px; border: 2px solid #3a3a52; background: #232342; color: #fff; font-weight: 900; cursor: pointer; }
+  .choice:hover:not(:disabled) { border-color: #a29bfe; background: #2f2f52; }
+  .choice.available { border-color: #6c5ce7; box-shadow: 0 0 0 2px rgba(108,92,231,.2), 0 0 14px rgba(108,92,231,.3); }
+  .choice.selected { border-color: #fdcb6e; background: rgba(253,203,110,.18); color: #fdcb6e; }
+  .choice.correct { border-color: #00b894; background: rgba(0,184,148,.2); color: #2ee5a8; }
+  .choice.wrong-choice { opacity: .34; }
+  .choice:disabled { cursor: default; }
+  .correct-hint { margin-top: .45rem; font-size: .72rem; color: #8a8aa0; }
+
+  .score-list { display: flex; flex-direction: column; gap: .3rem; }
+  .score-row { display: flex; align-items: center; gap: .5rem; padding: .35rem .5rem; border-radius: 6px; background: #16162a; font-size: .85rem; }
+  .score-row .pos { width: 24px; text-align: center; font-weight: 800; color: #a0a0b8; }
+  .score-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .score-row .score { color: #fdcb6e; font-weight: 900; font-variant-numeric: tabular-nums; }
+
+  .players-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .6rem; }
+  .phones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+  @media (max-width: 560px) { .phones { grid-template-columns: 1fr; } .setup-grid { grid-template-columns: 1fr; } }
+
+  .phone { background: linear-gradient(180deg, #1d1d36, #15152a); border: 1px solid #2a2a3e; border-radius: 18px; padding: .7rem; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+  .phone.locked { border-color: rgba(108,92,231,.6); }
+  .phone.correct { border-color: rgba(0,184,148,.65); }
+  .phone.wrong { border-color: rgba(214,48,49,.6); }
+  .phone-head { display: flex; align-items: center; justify-content: space-between; gap: .4rem; margin-bottom: .5rem; }
+  .phone-name { font-weight: 800; font-size: .9rem; color: #fff; }
+  .phone-score { color: #fdcb6e; font-weight: 900; font-size: .95rem; }
+  .phone-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: clamp(54px, 8vh, 72px); gap: .45rem; max-height: calc(clamp(54px, 8vh, 72px) * 2 + .45rem); overflow-y: auto; }
+  .choice-btn { height: clamp(54px, 8vh, 72px); border-radius: 12px; border: 2px solid #2a2a3e; background: #1a1a2e; color: #fff; font-size: clamp(1.4rem, 4vw, 2rem); font-weight: 900; cursor: pointer; transition: all .12s; }
+  .choice-btn:hover:not(:disabled) { border-color: #6c5ce7; }
+  .choice-btn:disabled { cursor: default; opacity: .45; }
+  .choice-btn.available {
+    background: #232342;
+    border-color: #6c5ce7;
+    opacity: 1;
+    animation: demoAnswerReady 1.8s ease-in-out infinite;
+  }
+  .choice-btn.selected { background: #6c5ce7; border-color: #a29bfe; opacity: 1; }
+  .choice-btn.correct { background: #00b894; border-color: #2ee5a8; opacity: 1; }
+  .choice-btn.wrong { background: #d63031; border-color: #ff7675; opacity: 1; }
+  @keyframes demoAnswerReady {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(108,92,231,.22), 0 0 10px rgba(108,92,231,.25); }
+    50% { box-shadow: 0 0 0 3px rgba(108,92,231,.48), 0 0 24px rgba(108,92,231,.6); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .choice-btn.available { animation: none; box-shadow: 0 0 0 2px rgba(108,92,231,.5), 0 0 18px rgba(108,92,231,.4); }
+  }
+  .phone-status { margin-top: .45rem; font-size: .68rem; color: #8a8aa0; line-height: 1.35; min-height: 2.2em; }
+  .phone-result { margin-top: .4rem; border-radius: 8px; padding: .35rem .45rem; font-size: .72rem; font-weight: 800; text-align: center; }
+  .phone-result.correct { background: rgba(0,184,148,.15); border: 1px solid rgba(0,184,148,.55); color: #2ee5a8; }
+  .phone-result.wrong { background: rgba(214,48,49,.15); border: 1px solid rgba(214,48,49,.55); color: #ff7878; }
+
+  .log { margin-top: 1rem; border-top: 1px solid #2a2a3e; padding-top: .5rem; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: .65rem; color: #636e72; max-height: 120px; overflow-y: auto; white-space: pre-wrap; }
+  .hint { font-size: .75rem; color: #8a8aa0; line-height: 1.45; }
+  .toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); background: #1a1a2e; border: 1px solid #2a2a3e; padding: .65rem 1.25rem; border-radius: 8px; font-size: .85rem; z-index: 100; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>🧪 Cenário de teste — Respostas</h1>
+    <p class="hint">Sala real no servidor: 1 apresentador + 4 jogadores simulados. Clique nos celulares para responder.</p>
+  </div>
+  <div class="badges">
+    <span class="badge badge-outline" id="top-room">sala —</span>
+    <span class="badge badge-outline" id="top-round">rodada —</span>
+    <span class="badge badge-outline" id="top-state">aguardando</span>
+    <a class="btn btn-outline" href="/" style="text-decoration:none;">Voltar ao site</a>
+  </div>
+</div>
+
+<main class="layout">
+  <section>
+    <div class="card">
+      <h2>1. Configure o cenário</h2>
+      <div class="setup-grid">
+        <div class="field">
+          <label for="cfg-count">Quantidade de opções (1–6)</label>
+          <input type="number" id="cfg-count" min="1" max="6" step="1" value="4">
+        </div>
+        <div class="field">
+          <label for="cfg-style">Tipo de opções</label>
+          <select id="cfg-style">
+            <option value="alpha">Alfabético (A, B, C…)</option>
+            <option value="numeric">Numérico (1, 2, 3…)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="cfg-first">Pontos para o 1º acerto</label>
+          <input type="number" id="cfg-first" min="1" max="100" step="1" value="3">
+        </div>
+        <div class="field">
+          <label for="cfg-later">Pontos para os demais acertos</label>
+          <input type="number" id="cfg-later" min="0" max="100" step="1" value="1">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" id="btn-new">🔄 Criar novo cenário</button>
+      <p class="hint" id="setup-status" style="margin-top:.5rem;">Criando sala de teste…</p>
+    </div>
+
+    <div class="card">
+      <div class="host-head">
+        <div>
+          <h2 style="margin:0;">2. Painel do apresentador</h2>
+          <p class="hint">O componente abaixo reproduz a tela real do host.</p>
+        </div>
+        <span class="room-code" id="host-code">—</span>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-success" id="btn-start" disabled>▶ Começar rodada</button>
+        <button class="btn btn-primary" id="btn-reveal" disabled>👁 Revelar respostas</button>
+        <button class="btn btn-warning" id="btn-next" disabled>⏭ Próxima rodada</button>
+      </div>
+      <label class="toggle-row">
+        <input type="checkbox" id="toggle-auto">
+        Auto-próxima rodada (avança depois da correção)
+      </label>
+
+      <h3>Ordem das respostas</h3>
+      <div id="answer-order"><p class="panel-empty">Aguardando o início da rodada.</p></div>
+
+      <div id="correct-panel" class="hidden">
+        <h3>Resposta correta</h3>
+        <div class="choice-grid" id="correct-options"></div>
+        <div class="correct-hint" id="correct-hint"></div>
+      </div>
+
+      <h3>Placar</h3>
+      <div class="score-list" id="score-list"></div>
+
+      <div class="log" id="log"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="players-head">
+      <div>
+        <h2 style="margin:0;">3. Celulares dos jogadores</h2>
+        <p class="hint">Cada jogador escolhe uma única alternativa. A escolha não pode ser trocada.</p>
+      </div>
+    </div>
+    <div class="phones" id="phones"></div>
+  </section>
+</main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/common.js"></script>
+<script>
+(function () {
+  const demo = {
+    room: null,
+    host: null,
+    players: [],
+    hostSocket: null,
+    hostReady: false,
+    activeRound: null,
+    answers: [],
+    eligible: [],
+    revealed: false,
+    graded: false,
+    correctOption: null,
+    pendingOption: null,
+    autoNext: false,
+    starting: false,
+    advancing: false,
+    config: { count: 4, style: 'alpha', first: 3, later: 1 },
+    scores: {},
+  };
+
+  function log(msg) {
+    const el = document.getElementById('log');
+    if (!el) return;
+    const line = new Date().toLocaleTimeString() + '  ' + msg;
+    el.textContent = line + '\n' + el.textContent;
+    console.log('[DEMO]', msg);
+  }
+
+  function configFromForm() {
+    const clamp = (v, min, max) => Math.min(max, Math.max(min, Number(v) || min));
+    return {
+      count: clamp(document.getElementById('cfg-count').value, 1, 6),
+      style: document.getElementById('cfg-style').value === 'numeric' ? 'numeric' : 'alpha',
+      first: clamp(document.getElementById('cfg-first').value, 1, 100),
+      later: clamp(document.getElementById('cfg-later').value, 0, 100),
+    };
+  }
+
+  function optionLabel(option) {
+    return demo.config.style === 'numeric'
+      ? String(option)
+      : String.fromCharCode(64 + option);
+  }
+
+  function setSetupStatus(text) {
+    document.getElementById('setup-status').textContent = text;
+  }
+
+  function topBadges() {
+    document.getElementById('top-room').textContent = demo.room ? 'sala ' + demo.room.code : 'sala —';
+    document.getElementById('top-round').textContent = demo.activeRound ? 'rodada ' + demo.activeRound.number : 'rodada —';
+    const stateEl = document.getElementById('top-state');
+    if (!demo.activeRound) {
+      stateEl.textContent = 'aguardando';
+      stateEl.className = 'badge badge-outline';
+    } else if (demo.graded) {
+      stateEl.textContent = 'corrigida';
+      stateEl.className = 'badge badge-graded';
+    } else if (demo.revealed) {
+      stateEl.textContent = 'revelada';
+      stateEl.className = 'badge badge-closed';
+    } else {
+      stateEl.textContent = 'respondendo';
+      stateEl.className = 'badge badge-open';
+    }
+  }
+
+  // ─── Host ────────────────────────────────────────
+  function renderHost() {
+    const startBtn = document.getElementById('btn-start');
+    const revealBtn = document.getElementById('btn-reveal');
+    const nextBtn = document.getElementById('btn-next');
+    if (startBtn) startBtn.disabled = !demo.hostReady || !!demo.activeRound || demo.starting;
+    if (revealBtn) revealBtn.disabled = !demo.activeRound || demo.revealed || demo.answers.length === 0;
+    if (nextBtn) nextBtn.disabled = !demo.activeRound || demo.advancing;
+    if (revealBtn) {
+      revealBtn.textContent = demo.answers.length === 0
+        ? '👁 Revelar respostas (sem respostas)'
+        : '👁 Revelar respostas agora';
+    }
+
+    document.getElementById('host-code').textContent = demo.room ? demo.room.code : '—';
+    topBadges();
+
+    const orderEl = document.getElementById('answer-order');
+    if (!orderEl) return;
+    if (!demo.answers.length) {
+      orderEl.innerHTML = '<p class="panel-empty">' +
+        (!demo.activeRound ? 'Aguardando o início da rodada.' : 'Ninguém respondeu ainda.') + '</p>';
+    } else {
+      const sorted = demo.answers.slice().sort((a, b) => a.position - b.position);
+      const firstTs = sorted[0]?.timestamp ? new Date(sorted[0].timestamp).getTime() : null;
+      orderEl.innerHTML = sorted.map(a => {
+        let delta = '';
+        if (firstTs && a.timestamp) {
+          const diff = (new Date(a.timestamp).getTime() - firstTs) / 1000;
+          if (diff > 0.0005) delta = '<span class="answer-time">+' + diff.toFixed(3) + 's</span>';
+        }
+        const cls = ['answer-row', a.position === 1 ? 'first' : ''];
+        if (demo.graded && demo.revealed) cls.push(a.is_correct ? 'is-correct' : 'is-wrong');
+        const chip = demo.revealed && a.option != null ? optionLabel(a.option) : '?';
+        const chipCls = demo.revealed && a.option != null ? 'answer-chip' : 'answer-chip hidden-answer';
+        let points = '';
+        if (demo.graded && demo.revealed) {
+          const pts = Number(a.awarded_points) || 0;
+          points = a.is_correct
+            ? '<span class="answer-points positive">+' + pts + '</span>'
+            : '<span class="answer-points zero">0</span>';
+        }
+        return '<div class="' + cls.join(' ') + '">' +
+          '<span class="answer-pos">' + a.position + 'º</span>' +
+          '<span class="answer-name">' + escapeHtml(a.player_name || 'Jogador') + '</span>' +
+          delta +
+          '<span class="' + chipCls + '">' + chip + '</span>' +
+          points +
+          '</div>';
+      }).join('');
+
+      if (!demo.revealed && demo.activeRound) {
+        const answered = new Set(sorted.map(a => a.player_id));
+        const missing = demo.players.filter(p => demo.eligible.length === 0 || demo.eligible.includes(p.id))
+          .filter(p => !answered.has(p.id));
+        if (missing.length) {
+          orderEl.insertAdjacentHTML('beforeend',
+            '<p class="waiting">⏳ Aguardando: ' + missing.map(p => escapeHtml(p.name)).join(', ') + '</p>');
+        }
+      }
+    }
+
+    renderCorrectPanel();
+    renderScores();
+  }
+
+  function renderCorrectPanel() {
+    const panel = document.getElementById('correct-panel');
+    const grid = document.getElementById('correct-options');
+    const hint = document.getElementById('correct-hint');
+    if (!panel || !grid) return;
+    panel.classList.toggle('hidden', !demo.revealed);
+    if (!demo.revealed) {
+      grid.innerHTML = '';
+      return;
+    }
+
+    let html = '';
+    for (let option = 1; option <= demo.config.count; option++) {
+      const cls = ['choice'];
+      if (demo.graded && demo.correctOption === option) cls.push('correct');
+      else if (!demo.graded && demo.pendingOption === option) cls.push('selected');
+      else if (demo.graded && demo.correctOption != null) cls.push('wrong-choice');
+      else if (!demo.graded) cls.push('available');
+      html += '<button type="button" class="' + cls.join(' ') + '" data-option="' + option + '"' +
+        (demo.graded ? ' disabled' : '') + ' onclick="demoChooseCorrect(' + option + ')">' +
+        optionLabel(option) + '</button>';
+    }
+    grid.innerHTML = html;
+
+    const confirm = document.getElementById('btn-confirm-correct');
+    if (confirm) confirm.remove();
+    if (!demo.graded && demo.pendingOption != null) {
+      const btn = document.createElement('button');
+      btn.id = 'btn-confirm-correct';
+      btn.className = 'btn btn-success btn-block';
+      btn.style.marginTop = '.5rem';
+      btn.textContent = '✔ Confirmar resposta ' + optionLabel(demo.pendingOption);
+      btn.onclick = confirmCorrect;
+      panel.appendChild(btn);
+    }
+
+    if (hint) {
+      if (demo.graded && demo.correctOption != null) {
+        hint.textContent = 'Rodada corrigida · resposta ' + optionLabel(demo.correctOption);
+      } else if (demo.pendingOption != null) {
+        hint.textContent = 'Confirme a alternativa ' + optionLabel(demo.pendingOption) + ' para pontuar.';
+      } else {
+        hint.textContent = 'Clique na alternativa que o vídeo apontou.';
+      }
+    }
+  }
+
+  function renderScores() {
+    const el = document.getElementById('score-list');
+    if (!el) return;
+    const rows = demo.players
+      .map(p => ({ id: p.id, name: p.name, score: demo.scores[p.id] ?? p.score ?? 0 }))
+      .sort((a, b) => b.score - a.score);
+    el.innerHTML = rows.map((r, i) => {
+      const pos = rows.filter(x => x.score > r.score).length + 1;
+      const medal = ['🥇', '🥈', '🥉'][pos - 1] || pos + 'º';
+      return '<div class="score-row"><span class="pos">' + medal + '</span>' +
+        '<span class="name">' + escapeHtml(r.name) + '</span>' +
+        '<span class="score">' + r.score + '</span></div>';
+    }).join('');
+  }
+
+  // ─── Celulares ───────────────────────────────────
+  function renderPhones() {
+    const container = document.getElementById('phones');
+    if (!container) return;
+    container.innerHTML = demo.players.map(p => {
+      const canAnswer = !!demo.activeRound && !demo.revealed && !demo.graded &&
+        !p.answer && demo.hostReady;
+      const buttons = [];
+      for (let option = 1; option <= demo.config.count; option++) {
+        const cls = ['choice-btn'];
+        if (canAnswer) cls.push('available');
+        if (!demo.revealed && p.answer === option) cls.push('selected');
+        if (demo.revealed && demo.correctOption === option) cls.push('correct');
+        else if (demo.revealed && p.answer === option) cls.push('wrong');
+        buttons.push('<button type="button" class="' + cls.join(' ') + '" data-player="' + p.id + '" data-option="' + option + '" ' +
+          'onclick="demoAnswer(\'' + p.id + '\',' + option + ')">' + optionLabel(option) + '</button>');
+      }
+      let stateCls = '';
+      if (demo.graded && p.result) stateCls = p.result.is_correct ? ' correct' : ' wrong';
+      else if (p.answer) stateCls = ' locked';
+
+      let status = 'Aguardando o apresentador.';
+      if (demo.activeRound) {
+        if (demo.graded) status = 'Rodada corrigida.';
+        else if (demo.revealed) status = p.answer ? 'Sua resposta: ' + optionLabel(p.answer) + '.' : 'Não respondeu.';
+        else if (p.answer) status = 'Resposta registrada: ' + optionLabel(p.answer) + ' (não pode trocar).';
+        else status = 'Toque em uma alternativa.';
+      }
+      const resultHtml = p.result        ? '<div class="phone-result ' + (p.result.is_correct ? 'correct' : 'wrong') + '">' +
+          (p.result.is_correct ? '✅ +' + p.result.awarded + ' ponto(s)' : '❌ Errou') + '</div>'
+        : '';
+
+      return '<div class="phone' + stateCls + '">' +
+        '<div class="phone-head"><span class="phone-name">' + escapeHtml(p.name) + '</span>' +
+        '<span class="phone-score">' + (demo.scores[p.id] ?? p.score ?? 0) + '</span></div>' +
+        '<div class="phone-grid">' + buttons.join('') + '</div>' +
+        '<div class="phone-status">' + status + '</div>' +
+        resultHtml +
+        '</div>';
+    }).join('');
+
+    // Desabilita botões quando não pode responder; o estado "available"
+    // acompanha exatamente a possibilidade de clique.
+    container.querySelectorAll('.choice-btn').forEach(btn => {
+      const pid = btn.dataset.player;
+      const player = demo.players.find(p => p.id === pid);
+      const disabled = !demo.activeRound || demo.revealed || demo.graded ||
+        !demo.hostReady || !player || !!player.answer;
+      btn.disabled = disabled;
+      btn.classList.toggle('available', !disabled);
+    });
+  }
+
+  function renderAll() {
+    renderHost();
+    renderPhones();
+  }
+
+  // ─── Eventos do servidor ─────────────────────────
+  function applyStatus(data) {
+    if (data.room) demo.room = { ...demo.room, ...data.room };
+    if (data.scores) {
+      demo.scores = {};
+      data.scores.forEach(s => { demo.scores[s.player_id] = s.score; });
+    }
+    if (data.current_round) {
+      demo.activeRound = { id: data.current_round.id, number: data.current_round.round_number };
+      demo.answers = data.current_round.answers || [];
+      demo.eligible = data.current_round.eligible_player_ids || [];
+      demo.revealed = data.current_round.answers_revealed === true;
+      demo.graded = data.current_round.graded === true;
+      demo.correctOption = data.current_round.correct_option ?? null;
+    } else {
+      demo.activeRound = null;
+      demo.answers = [];
+      demo.eligible = [];
+      demo.revealed = false;
+      demo.graded = false;
+      demo.correctOption = null;
+      demo.pendingOption = null;
+      demo.players.forEach(p => { p.answer = null; p.result = null; });
+    }
+    demo.starting = false;
+    demo.advancing = false;
+    if (demo.graded) applyResultsToPlayers();
+    renderAll();
+  }
+
+  function applyResultsToPlayers() {
+    demo.players.forEach(p => {
+      const mine = demo.answers.find(a => a.player_id === p.id);
+      if (mine) {
+        p.answer = mine.option ?? p.answer;
+        p.result = {
+          is_correct: mine.is_correct === true,
+          awarded: mine.awarded_points ?? 0,
+        };
+      }
+    });
+  }
+
+  function onRoundStarted(data) {
+    demo.activeRound = { id: data.round_id, number: data.round_number };
+    demo.answers = [];
+    demo.eligible = data.eligible_player_ids || [];
+    demo.revealed = false;
+    demo.graded = false;
+    demo.correctOption = null;
+    demo.pendingOption = null;
+    demo.starting = false;
+    demo.advancing = false;
+    demo.players.forEach(p => { p.answer = null; p.result = null; });
+    log('Rodada ' + data.round_number + ' iniciada (clique liberado nos celulares).');
+    renderAll();
+  }
+
+  function onAnswersOrder(data) {
+    demo.answers = data.answers || [];
+    demo.revealed = data.answers_revealed === true;
+    demo.graded = data.graded === true;
+    demo.correctOption = data.correct_option ?? null;
+    if (Array.isArray(data.eligible_player_ids)) demo.eligible = data.eligible_player_ids;
+    renderAll();
+  }
+
+  function onRevealed(data) {
+    demo.answers = data.answers || [];
+    demo.revealed = true;
+    demo.graded = data.graded === true;
+    demo.correctOption = data.correct_option ?? null;
+    demo.pendingOption = null;
+    if (Array.isArray(data.eligible_player_ids)) demo.eligible = data.eligible_player_ids;
+    log('Respostas reveladas.');
+    renderAll();
+  }
+
+  function onCorrected(data) {
+    demo.answers = data.answers || [];
+    demo.revealed = true;
+    demo.graded = true;
+    demo.correctOption = data.correct_option ?? null;
+    demo.pendingOption = null;
+    if (data.scores) {
+      demo.scores = {};
+      data.scores.forEach(s => { demo.scores[s.player_id] = s.score; });
+    }
+    applyResultsToPlayers();
+    log('Rodada corrigida: alternativa ' + optionLabel(demo.correctOption) + '.');
+    renderAll();
+
+    if (demo.autoNext) {
+      setTimeout(() => {
+        if (demo.autoNext && demo.activeRound && demo.graded) requestNextRound();
+      }, 900);
+    }
+  }
+
+  function onScores(data) {
+    if (!data || !data.scores) return;
+    demo.scores = {};
+    data.scores.forEach(s => { demo.scores[s.player_id] = s.score; });
+    renderAll();
+  }
+
+  function onNextRound() {
+    demo.activeRound = null;
+    demo.answers = [];
+    demo.revealed = false;
+    demo.graded = false;
+    demo.correctOption = null;
+    demo.pendingOption = null;
+    demo.players.forEach(p => { p.answer = null; p.result = null; });
+    demo.advancing = false;
+    renderAll();
+    log('Rodada encerrada; abrindo a próxima…');
+    setTimeout(() => startRound(), 500);
+  }
+
+  // ─── Ações do host ───────────────────────────────
+  function startRound() {
+    if (!demo.hostSocket || !demo.hostReady || demo.activeRound || demo.starting) return;
+    demo.starting = true;
+    demo.hostSocket.emit('rodada:iniciar', { room_id: demo.room.id, media_url: '', correct_answer: '' });
+    setTimeout(() => {
+      if (!demo.activeRound) demo.starting = false;
+      renderHost();
+    }, 2500);
+  }
+
+  function revealAnswers() {
+    if (!demo.hostSocket || !demo.activeRound || demo.revealed) return;
+    demo.hostSocket.emit('respostas:revelar', {
+      room_id: demo.room.id,
+      round_id: demo.activeRound.id,
+    }, (res) => {
+      if (!res || !res.ok) toast((res && res.error) || 'Não foi possível revelar');
+    });
+  }
+
+  function requestNextRound() {
+    if (!demo.hostSocket || !demo.activeRound || demo.advancing) return;
+    demo.advancing = true;
+    renderHost();
+    demo.hostSocket.emit('rodada:proxima', {
+      room_id: demo.room.id,
+      round_id: demo.activeRound.id,
+    });
+  }
+
+  function chooseCorrect(option) {
+    if (!demo.revealed || demo.graded) return;
+    demo.pendingOption = option;
+    renderCorrectPanel();
+  }
+
+  function confirmCorrect() {
+    if (!demo.revealed || demo.graded || demo.pendingOption == null) return;
+    demo.hostSocket.emit('resposta:corrigir', {
+      room_id: demo.room.id,
+      round_id: demo.activeRound.id,
+      option: demo.pendingOption,
+    }, (res) => {
+      if (!res || !res.ok) toast((res && res.error) || 'Não foi possível corrigir');
+    });
+  }
+
+  function playerAnswer(playerId, option) {
+    const player = demo.players.find(p => p.id === playerId);
+    if (!player || !demo.activeRound || demo.revealed || demo.graded || player.answer) return;
+    player.answer = option;
+    renderPhones();
+    player.socket.emit('resposta:enviar', {
+      room_id: demo.room.id,
+      round_id: demo.activeRound.id,
+      player_id: player.id,
+      option,
+    }, (res) => {
+      if (!res || !res.ok) {
+        if (res && res.code === 'DUPLICATE') return;
+        player.answer = null;
+        renderPhones();
+        toast((res && res.error) || 'Não foi possível responder');
+      }
+    });
+  }
+
+  // ─── Conexões ────────────────────────────────────
+  function connectHost() {
+    const socket = io('/', { query: { room_id: demo.room.id, user_id: demo.host.id } });
+    demo.hostSocket = socket;
+
+    socket.on('connect', () => {
+      demo.hostReady = true;
+      socket.emit('sala:entrar', { room_id: demo.room.id, user_id: demo.host.id });
+      log('Host conectado.');
+      renderAll();
+    });
+    socket.on('disconnect', () => {
+      demo.hostReady = false;
+      renderAll();
+    });
+    socket.on('connect_error', (err) => {
+      demo.hostReady = false;
+      toast('Erro de conexão: ' + err.message);
+      renderAll();
+    });
+    socket.on('sala:status', applyStatus);
+    socket.on('rodada:iniciada', onRoundStarted);
+    socket.on('respostas:ordem', onAnswersOrder);
+    socket.on('respostas:reveladas', onRevealed);
+    socket.on('respostas:corrigidas', onCorrected);
+    socket.on('placar:atualizado', onScores);
+    socket.on('rodada:proxima', onNextRound);
+    socket.on('erro', (data) => {
+      log('Erro: ' + data.message);
+      toast(data.message);
+    });
+  }
+
+  function connectPlayerSocket(player) {
+    const socket = io('/', { query: { room_id: demo.room.id, user_id: player.id } });
+    player.socket = socket;
+
+    socket.on('connect', () => {
+      socket.emit('sala:entrar', { room_id: demo.room.id, user_id: player.id });
+    });
+    socket.on('resposta:minha', (data) => {
+      if (!demo.activeRound || data.round_id !== demo.activeRound.id) return;
+      if (data.option != null) {
+        player.answer = data.option;
+        renderPhones();
+      }
+    });
+    socket.on('erro', (data) => toast(player.name + ': ' + data.message));
+  }
+
+  // ─── Cenário ─────────────────────────────────────
+  async function cleanupScenario() {
+    demo.hostReady = false;
+    if (demo.hostSocket) {
+      try { demo.hostSocket.disconnect(); } catch (_) { /* ignore */ }
+    }
+    demo.players.forEach(p => {
+      if (p.socket) { try { p.socket.disconnect(); } catch (_) { /* ignore */ } }
+    });
+    const oldRoom = demo.room;
+    const oldHost = demo.host;
+    demo.room = null;
+    demo.host = null;
+    demo.players = [];
+    demo.hostSocket = null;
+    demo.activeRound = null;
+    demo.answers = [];
+    demo.revealed = false;
+    demo.graded = false;
+    demo.correctOption = null;
+    demo.pendingOption = null;
+    demo.starting = false;
+    demo.advancing = false;
+    demo.scores = {};
+    demo.hostReady = false;
+
+    if (oldRoom && oldHost) {
+      try {
+        await fetch('/api/rooms/' + oldRoom.id, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ presenter_id: oldHost.id }),
+        });
+      } catch (_) { /* ignore */ }
+    }
+  }
+
+  async function bootScenario() {
+    const button = document.getElementById('btn-new');
+    button.disabled = true;
+    button.textContent = '⏳ Criando cenário…';
+    demo.config = configFromForm();
+    demo.autoNext = document.getElementById('toggle-auto').checked;
+
+    try {
+      await cleanupScenario();
+      setSetupStatus('Criando apresentador…');
+
+      const hostRes = await api('/auth', { name: 'Demo Host ' + Date.now() });
+      if (!hostRes || !hostRes.user) throw new Error((hostRes && hostRes.error) || 'Falha ao criar apresentador');
+      demo.host = hostRes.user;
+
+      setSetupStatus('Criando sala do tipo Respostas…');
+      const roomRes = await api('/rooms', {
+        user_id: demo.host.id,
+        title: 'Teste — Respostas',
+        type: 'answers',
+        config: {
+          video_url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          option_count: demo.config.count,
+          option_style: demo.config.style,
+          points_first: demo.config.first,
+          points_later: demo.config.later,
+        },
+      });
+      if (!roomRes || !roomRes.room) throw new Error((roomRes && roomRes.error) || 'Falha ao criar sala');
+      demo.room = roomRes.room;
+
+      const names = ['Ana', 'Bob', 'Carol', 'David'];
+      for (const name of names) {
+        setSetupStatus('Entrando com ' + name + '…');
+        const userRes = await api('/auth', { name });
+        if (!userRes || !userRes.user) throw new Error('Falha ao criar jogador ' + name);
+        const joined = await api('/rooms/' + demo.room.id + '/players', { user_id: userRes.user.id });
+        if (!joined || !joined.ok) {
+          throw new Error((joined && joined.error) || 'Falha ao entrar com ' + name);
+        }
+        demo.players.push({ id: userRes.user.id, name, answer: null, result: null, socket: null });
+      }
+
+      log('Sala ' + demo.room.code + ' criada com ' + demo.players.length + ' jogadores.');
+      setSetupStatus('Sala ' + demo.room.code + ' pronta: ' + demo.config.count + ' opções, ' +
+        (demo.config.style === 'numeric' ? 'numéricas' : 'alfabéticas') + '.');
+      renderAll();
+      connectHost();
+      demo.players.forEach(connectPlayerSocket);
+    } catch (err) {
+      setSetupStatus('Erro: ' + err.message);
+      toast('Erro ao criar cenário: ' + err.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = '🔄 Criar novo cenário';
+    }
+  }
+
+  // Handlers globais usados nos onclick gerados.
+  window.demoAnswer = playerAnswer;
+  window.demoChooseCorrect = chooseCorrect;
+
+  document.getElementById('btn-new').addEventListener('click', bootScenario);
+  document.getElementById('btn-start').addEventListener('click', startRound);
+  document.getElementById('btn-reveal').addEventListener('click', revealAnswers);
+  document.getElementById('btn-next').addEventListener('click', requestNextRound);
+  document.getElementById('toggle-auto').addEventListener('change', (e) => {
+    demo.autoNext = e.target.checked;
+  });
+
+  window.addEventListener('beforeunload', () => {
+    if (!demo.room || !demo.host) return;
+    try {
+      fetch('/api/rooms/' + demo.room.id, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ presenter_id: demo.host.id }),
+        keepalive: true,
+      });
+    } catch (_) { /* ignore */ }
+  });
+
+  bootScenario();
+})();
+</script>
+</body>
+</html>

@@ -145,7 +145,7 @@
       renderPresenterPlayers(state.players);
     }
 
-    if (state.autoNextRound) startDemoRound();
+    maybeAutoAdvanceRound();
   };
 
   // Simula a punição configurada na sala, sem socket.
@@ -165,7 +165,7 @@
       renderPresenterPlayers(state.players);
       renderBuzzerOrderList();
       toast(`${player.name} errou: −${cfg.penalty_points} ponto(s)`);
-      if (state.autoNextRound) startDemoRound();
+      maybeAutoAdvanceRound();
       return;
     }
 
@@ -183,7 +183,7 @@
     renderBuzzerOrderList();
     toast(`${player.name} punido: ${cfg.penalty_rounds} rodada(s) sem buzinar`);
 
-    if (state.autoNextRound) startDemoRound();
+    maybeAutoAdvanceRound();
   };
 
   window.handleRemovePlayer = function (userId) {
